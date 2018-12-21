@@ -1,0 +1,36 @@
+#ifndef BITSET_H
+#define BITSET_H
+
+#include <stdint.h>
+
+unsigned short equals(uint64_t value1, uint64_t value2);
+
+uint64_t set_bit(uint64_t value, unsigned short position);
+
+uint64_t clear_bit(uint64_t value, unsigned short position);
+
+uint64_t toggle_bit(uint64_t value, unsigned short position);
+
+unsigned short check_bit(uint64_t value, unsigned short position);
+
+unsigned short is_singleton(uint64_t value);
+
+uint64_t bits_and(uint64_t value1, uint64_t value2);
+
+uint64_t bits_or(uint64_t value1, uint64_t value2);
+
+uint64_t bits_xor(uint64_t value1, uint64_t value2);
+
+uint64_t bits_flip(uint64_t value);
+
+void print_bits(uint64_t value);
+
+unsigned short popcount_mit_hakmem (uint64_t value);
+
+unsigned short popcount_lookup_table (uint64_t value);
+
+unsigned short popcount_naive (uint64_t value); 
+
+unsigned short popcount_kernighan (uint64_t value);
+
+#endif /* BITSET_H */

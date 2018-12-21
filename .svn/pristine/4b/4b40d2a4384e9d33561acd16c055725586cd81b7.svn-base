@@ -1,0 +1,19 @@
+CC	     = gcc
+CFLAGS   = -Wall -Wextra -std=c99
+LDFLAGS  = -lm
+
+BIN      = inshiNoHeya
+FILES    = composites.c inshiNoHeya.c
+
+.PHONY: all clean cleanall $(BIN)
+
+all: $(BIN)
+
+inshiNoHeya:
+	$(CC) $(CFLAGS) $(FILES) $(LDFLAGS) -o $(BIN)
+
+clean:
+	@(rm -f *.o *~)
+
+cleanall: clean
+	@(rm -f *.grid $(BIN))

@@ -1,0 +1,33 @@
+#ifndef INSHI_H
+#define INSHI_H
+
+#define VERSION 0.2.1
+
+#define MAX_SIZE 16
+
+typedef struct cell_t Cell;
+typedef struct grid_t Grid;
+typedef struct composite_t Composite;
+typedef struct composites_set_t CompositesSet;
+
+void printGrid (Grid* grid);
+Grid* readFile (const char *path);
+Grid* initializeGrid (int size);
+unsigned int setRightwardRoom (Grid *grid, unsigned int currentCell, unsigned long long roomValue, unsigned short roomLength);
+unsigned int setDownwardRoom (Grid *grid, unsigned int currentCell, unsigned long long roomValue, unsigned short roomLength);
+void printValuesInGrid (Grid *grid);
+void freeGrid (Grid *grid);
+
+void freeCompositesSet (CompositesSet *set);
+void printCompositesSets (CompositesSet *set);
+void printCompositesSets (CompositesSet *set);
+void findCompositeNumbers (int x);
+Composite* generateEmptyComposite ();
+CompositesSet* generateEmptySet ();
+CompositesSet* findComposites (int product);
+CompositesSet* findSubComposites (unsigned int originalFactor, int subProduct, CompositesSet *originalSet);
+void addCompositeToSet (Composite *firstFactor, uint64_t factor);
+void addCompositesToSet (Composite *firstFactor, uint64_t factor1, uint64_t factor2);
+Composite* copyComposite (Composite *compositeToCopy);
+
+#endif /* INSHI_H */

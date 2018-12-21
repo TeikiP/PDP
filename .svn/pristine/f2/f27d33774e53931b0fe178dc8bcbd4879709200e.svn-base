@@ -1,0 +1,762 @@
+#include "bitset.h"
+#include "composites.h"
+
+#include <errno.h>
+#include <inttypes.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define MAX_GRID_SIZE 64
+#define MAX_ROOM_SIZE 20
+
+typedef struct cell_t cell_t;
+struct cell_t {
+  /* Value within the cell. */
+  uint64_t value;
+  /* Required product for cells in the current room. */
+  unsigned long long room_product;
+  /* Sets of factors that make up this room_product. */
+  composites_set_t* composites_set;
+  /* Room length. */
+  unsigned short room_length;
+  /* Previous cell in the current room. */
+  cell_t* previous;
+  /* Next cell in the current room. */
+  cell_t* next;
+};
+
+typedef struct grid_t {
+  /* Grid that we are working on. */
+  cell_t** cells;
+  /* Size of this grid. */
+  size_t size;
+  /* Number of cells solved by heuristics */
+  unsigned int heuristics;
+} grid_t;
+
+/* Makes a rightward room in the grid and returns the update grid reading
+ * position. */
+static unsigned int set_rightward_room(grid_t* grid,
+                                       unsigned int current_cell,
+                                       unsigned long long room_value,
+                                       unsigned short room_length) {
+  /* We generate a composite set for this room */
+  composites_set_t* room_set = find_composites(room_value, grid->size);
+
+  /* We skip over cells that have already been assigned */
+  while (grid->cells[current_cell]->room_product != 0)
+    current_cell++;
+
+  /* We set each cell in the room */
+  for (unsigned short i = 0; i < room_length; i++) {
+    /* room_product */
+    grid->cells[current_cell + i]->room_product = room_value;
+
+    /* composites_set */
+    grid->cells[current_cell + i]->composites_set = room_set;
+
+    /* room_length */
+    grid->cells[current_cell + i]->room_length = room_length;
+
+    /* previous */
+    if (i > 0)
+      grid->cells[current_cell + i]->previous =
+          grid->cells[current_cell + (i - 1)];
+
+    /* next */
+    if (i < room_length - 1)
+      grid->cells[current_cell + i]->next = grid->cells[current_cell + (i + 1)];
+  }
+
+  return current_cell + room_length;
+}
+
+/* Makes a downward room in the grid and returns the update grid reading
+ * position. */
+static unsigned int set_downward_room(grid_t* grid,
+                                      unsigned int current_cell,
+                                      unsigned long long room_value,
+                                      unsigned short room_length) {
+  /* We generate a composite set for this room */
+  composites_set_t* room_set = find_composites(room_value, grid->size);
+
+  /* We skip over cells that have already been assigned */
+  while (grid->cells[current_cell]->room_product != 0)
+    current_cell++;
+
+  /* We set each cell in the room */
+  for (unsigned short i = 0; i < room_length; i++) {
+    /* room_product */
+    grid->cells[current_cell + i * grid->size]->room_product = room_value;
+
+    /* composites_set */
+    grid->cells[current_cell + i * grid->size]->composites_set = room_set;
+
+    /* room_length */
+    grid->cells[current_cell + i * grid->size]->room_length = room_length;
+
+    /* previous */
+    if (i > 0)
+      grid->cells[current_cell + i * grid->size]->previous =
+          grid->cells[current_cell + (i - 1) * grid->size];
+
+    /* next */
+    if (i < room_length - 1)
+      grid->cells[current_cell + i * grid->size]->next =
+          grid->cells[current_cell + (i + 1) * grid->size];
+  }
+
+  return current_cell + 1;
+}
+
+/* Allocates a new empty grid and returns a pointer to it. */
+static grid_t* initialize_grid(size_t size) {
+  grid_t* grid = malloc(sizeof(grid_t));
+
+  grid->size = size;
+  grid->heuristics = 0;
+  grid->cells = malloc(sizeof(cell_t*) * grid->size * grid->size);
+
+  for (unsigned int i = 0; i < grid->size; i++)
+    for (unsigned int j = 0; j < grid->size; j++) {
+      grid->cells[i * grid->size + j] = malloc(sizeof(cell_t));
+
+      grid->cells[i * grid->size + j]->value = 0;
+      grid->cells[i * grid->size + j]->room_product = 0;
+      grid->cells[i * grid->size + j]->room_length = 0;
+      //TODO grid->cells[i * grid->size + j]->composites_set = NULL;
+      grid->cells[i * grid->size + j]->previous = NULL;
+      grid->cells[i * grid->size + j]->next = NULL;
+    }
+
+  return grid;
+}
+
+/* Checks if all cells of a grid have been filled according to the size it is
+ * expected to have. Returns 1 if it is valid, 0 otherwise. */
+static int check_grid_size(grid_t* grid) {
+  for (unsigned int y = 0; y < grid->size; y++)
+    for (unsigned int x = 0; x < grid->size; x++)
+      if (grid->cells[y * grid->size + x]->room_product == 0)
+        return 0;
+
+  return 1;
+}
+
+/* Reads a grid from an input file. */
+static grid_t* read_file(const char* path) {
+  const char right_delimiter = 'r';
+  const char bottom_delimiter = 'b';
+  char line[256];
+
+  unsigned long long room_value = 0;
+  unsigned short room_length = 0;
+  unsigned short grid_size = 0;
+
+  unsigned int i = 0;
+  unsigned int current_cell = 0;
+
+  grid_t* grid = NULL;
+  FILE* input_file = fopen(path, "r");
+
+  if (input_file != NULL) {
+    /* Reads the grid size from the first line */
+    fscanf(input_file, "%s", line);
+
+    grid_size = atoll(line);
+
+    if (grid_size < MAX_GRID_SIZE)
+      grid = initialize_grid(grid_size);
+
+    /* Reads the input file line by line */
+    while (fscanf(input_file, "%s", line) != EOF) {
+      /* Reads the room product value */
+      while (line[i] >= '0' && line[i] <= '9') {
+        room_value = room_value * 10 + line[i++] - '0';
+      }
+
+      if (room_value == 0)
+        printf("Error in input file format.\n");
+
+      if (line[i] == right_delimiter) {
+        i++;
+
+        /* Reads the room length */
+        while (line[i] >= '0' && line[i] <= '9') {
+          room_length = room_length * 10 + line[i++] - '0';
+        }
+
+        if (room_length == 0)
+          printf("Error in input file format.\n");
+
+        /* Sets all cells in the room and updates the position */
+        current_cell =
+            set_rightward_room(grid, current_cell, room_value, room_length);
+      }
+
+      else if (line[i] == bottom_delimiter) {
+        i++;
+
+        /* Reads the room length */
+        while (line[i] >= '0' && line[i] <= '9') {
+          room_length = room_length * 10 + line[i++] - '0';
+        }
+
+        if (room_length == 0)
+          printf("Error in input file format.\n");
+
+        /* Sets all cells in the room and updates the position */
+        current_cell =
+            set_downward_room(grid, current_cell, room_value, room_length);
+      }
+
+      else
+        printf("Error in input file format.\n");
+
+      i = 0;
+      room_value = 0;
+      room_length = 0;
+    }
+
+    if (check_grid_size(grid) == 0)
+      printf("The input file is invalid.\n");
+  }
+
+  else
+    printf("Error reading input file.\n");
+
+  errno = 0;
+  if (fclose(input_file) != 0)
+    printf("Error : %d\n", errno);
+
+  return grid;
+}
+
+/* Prints the grid in a human readable way in a new output file. */
+static void print_grid(grid_t* grid) {
+  FILE* output_file = fopen("output.grid", "w");
+
+  if (output_file != NULL) {
+    int size = grid->size;
+
+    for (int k = 0; k < size; k++) {
+      fprintf(output_file, "  ___ ");
+    }
+
+    for (int i = 0; i < size; i++) {
+      fprintf(output_file, "\n| ");
+
+      for (int j = 0; j < size; j++) {
+        if (grid->cells[i * size + j]->value < 10)
+          fprintf(output_file, " %" PRIu64 " ",
+                  grid->cells[i * size + j]->value);
+        else if (grid->cells[i * size + j]->value < 100)
+          fprintf(output_file, "%" PRIu64 " ",
+                  grid->cells[i * size + j]->value);
+        else
+          fprintf(output_file, "%" PRIu64, grid->cells[i * size + j]->value);
+
+        if (j == size - 1)
+          fprintf(output_file, " |\n| ");
+        else if (grid->cells[i * size + j]->next ==
+                 grid->cells[i * size + j + 1])
+          fprintf(output_file, "   ");
+        else
+          fprintf(output_file, " | ");
+      }
+
+      for (int j = 0; j < size; j++) {
+        if (j == size)
+          fprintf(output_file, " |");
+        else if (/*TODO (i+1) < size && */grid->cells[i * size + j]->next ==
+                 grid->cells[(i + 1) * size + j])
+          fprintf(output_file, "   ");
+        else
+          fprintf(output_file, "___");
+
+        fprintf(output_file, "   ");
+      }
+    }
+  } else
+    printf("Error opening output file.\n");
+
+  errno = 0;
+  if (fclose(output_file) != 0)
+    printf("Error : %d\n", errno);
+}
+
+/* Prints each cell of the grid with their coordinates, cell value and room
+ * product. Used for debugging. */
+static void print_values_in_grid(grid_t* grid) {
+  printf("Printing values in grid :\n");
+
+  for (unsigned int i = 0; i < grid->size; i++)
+    for (unsigned int j = 0; j < grid->size; j++)
+      printf("Cell (%d,%d) = %lu [%llu]\n", i, j,
+             grid->cells[i * grid->size + j]->value,
+             grid->cells[i * grid->size + j]->room_product);
+
+  printf("\n");
+}
+
+/* Deallocates the memory used by the grid. */
+static void free_grid(grid_t* grid) {
+  for (unsigned int i = 0; i < grid->size; i++)
+    for (unsigned int j = 0; j < grid->size; j++) {
+      /* Frees up a composites_set_t assigned to a room */
+      if (grid->cells[i * grid->size + j]->composites_set != NULL) {
+        free_composites_set(grid->cells[i * grid->size + j]->composites_set);
+
+        cell_t* iterator = grid->cells[i * grid->size + j];
+        while (iterator->next != NULL) {
+          iterator = iterator->next;
+          iterator->composites_set = NULL;
+        }
+      }
+
+      /* Frees up a cell */
+      free(grid->cells[i * grid->size + j]);
+    }
+
+  free(grid->cells);
+  free(grid);
+}
+
+/* Checks if the row of a given cell has no duplicate numbers. Returns 1 if row
+ * is valid, 0 otherwise. */
+static int check_row(grid_t* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  uint64_t cell_value = grid->cells[y * grid->size + x]->value;
+
+  for (unsigned int i = 0; i < grid->size; i++) {
+    if (i == x)
+      continue;
+
+    else if (cell_value == grid->cells[y * grid->size + i]->value) {
+      is_valid = 0;
+      break;
+    }
+  }
+
+  return is_valid;
+}
+
+/* Checks if the column of a given cell has no duplicate numbers. Returns 1 if
+ * column is valid, 0 otherwise. */
+static int check_col(grid_t* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  uint64_t cell_value = grid->cells[y * grid->size + x]->value;
+
+  for (unsigned int i = 0; i < grid->size; i++) {
+    if (i == y)
+      continue;
+
+    else if (cell_value == grid->cells[i * grid->size + x]->value) {
+      is_valid = 0;
+      break;
+    }
+  }
+
+  return is_valid;
+}
+
+/* Checks if the room of a given cell makes the expected product. Returns 1 if
+ * room is valid, 0 if all cells are filled but do not make up the proper
+ * product, -1 if the room isn't fully filled. */
+static int check_room(grid_t* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  cell_t* iterator = grid->cells[y * grid->size + x];
+  unsigned long long current_product = 1;
+  unsigned long long expected_product = iterator->room_product;
+
+  while (iterator->previous != NULL)
+    iterator = iterator->previous;
+
+  while (iterator->next != NULL) {
+    current_product *= iterator->value;
+    iterator = iterator->next;
+  }
+
+  current_product *= iterator->value;
+
+  if (current_product == 0)
+    is_valid = -1;
+
+  else if (current_product != expected_product)
+    is_valid = 0;
+
+  return is_valid;
+}
+
+/* Checks if a single cell is valid. Returns 1 if cell is valid, 0 otherwise, -1
+ * if the rows and columns are valid but the room is still unfilled. */
+static int check_cell(grid_t* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  is_valid *= check_row(grid, x, y);
+  is_valid *= check_col(grid, x, y);
+  is_valid *= check_room(grid, x, y);
+
+  return is_valid;
+}
+
+/* Checks if a grid is valid. Returns 1 if everything is valid, 0 otherwise. */
+static int check_grid(grid_t* grid) {
+  for (unsigned int y = 0; y < grid->size; y++)
+    for (unsigned int x = 0; x < grid->size; x++)
+      if (check_cell(grid, x, y) != 1)
+        return 0;
+
+  return 1;
+}
+
+/*Fills all rooms that only have one cell with the value of that room. */
+static void fill_single_cells(grid_t* grid) {
+  for (unsigned int y = 0; y < grid->size; y++) {
+    for (unsigned int x = 0; x < grid->size; x++) {
+      if (grid->cells[y * grid->size + x]->room_length == 1) {
+        grid->cells[y * grid->size + x]->value =
+            grid->cells[y * grid->size + x]->room_product;
+        grid->heuristics++;
+      }
+    }
+  }
+}
+
+/* Attempts to solve the grid. 1 if a solution was found, 0 otherwise.*/
+static int solve_cell(grid_t* grid, unsigned int x, unsigned int y) {
+  cell_t* current_cell = grid->cells[y * grid->size + x];
+
+  /* If the cell hasn't been set yet */
+  if (current_cell->value == 0) {
+    composites_set_t* set_iterator = current_cell->composites_set;
+
+    do {
+      /* Find next set of appropriate length */
+      while (set_iterator != NULL &&
+             get_set_length(set_iterator) != current_cell->room_length)
+        set_iterator = set_iterator->next;
+
+      /* If there are no sets left, skip the process and backtrack */
+      if (set_iterator != NULL) {
+        /* Find potential values for cell within current set */
+        for (unsigned short i = 0; i < 64; i++) {
+          if (bits_and(set_iterator->factors, 1ULL << i)) { //TODO Fix 1 -> 1ULL 
+            current_cell->value = i + 1;
+
+            int is_cell_valid = check_cell(grid, x, y);
+
+            /* If cell valid or potentially valid */
+            if (is_cell_valid != 0) {
+              unsigned int new_x = x + 1;
+              unsigned int new_y = y;
+
+              /* If we have reached the end of the row */
+              if (new_x >= grid->size) {
+                new_x = 0;
+                new_y++;
+              }
+
+              /* If we have reached the end of the grid */
+              if (new_y >= grid->size)
+                return 1;
+
+              /* Otherwise, we check the next cell */
+              else {
+                if (solve_cell(grid, new_x, new_y) == 1)
+                  return 1;
+
+                else
+                  continue;
+              }
+            }
+
+            /* If cell is invalid */
+            else
+              continue;
+          }
+        }
+
+        set_iterator = set_iterator->next;
+      }
+
+    } while (set_iterator != NULL);
+
+    /* If no solutions found with the current grid, reset the cell value */
+    current_cell->value = 0;
+
+    return 0;
+  }
+
+  /* If the cell has already been set */
+  else {
+    unsigned int new_x = x + 1;
+    unsigned int new_y = y;
+
+    /* If we have reached the end of the row */
+    if (new_x >= grid->size) {
+      new_x = 0;
+      new_y++;
+    }
+
+    /* If we have reached the end of the grid */
+    if (new_y >= grid->size)
+      return 1;
+
+    /* Otherwise, we check the next cell */
+    else
+      return solve_cell(grid, new_x, new_y);
+  }
+}
+
+/* Mainly a wrapper for solve_cell that also calls upon heuristics first. Returns 1 if the grid has been solved, 0 otherwise.
+ */
+static int solve_grid(grid_t* grid) {
+  /* Fills up all single-celled rooms */
+  fill_single_cells(grid);
+
+  /* Attempts to fill up the rest of the grid */
+  return solve_cell(grid, 0, 0);
+}
+
+/* Randomly makes room in a generated grid with evenly distributed room lengths.
+ */
+static grid_t* random_even_rooms(grid_t* grid) {
+  for (unsigned int y = 0; y < grid->size; y++) {
+    for (unsigned int x = 0; x < grid->size; x++) {
+      if (grid->cells[y * grid->size + x]->room_length == 0) {
+        unsigned short direction = rand() % 2;
+
+        /* downwards */
+        if (direction == 0) {
+          unsigned short length = rand() % (grid->size - y) + 1;
+          unsigned long long product = 1;
+
+          for (unsigned short i = 0; i < length; i++) {
+            /* room length */
+            grid->cells[y * grid->size + x + i * grid->size]->room_length =
+                length;
+
+            /* previous */
+            if (i > 0)
+              grid->cells[y * grid->size + x + i * grid->size]->previous =
+                  grid->cells[y * grid->size + x + (i - 1) * grid->size];
+
+            /* next */
+            if (i < length - 1)
+              grid->cells[y * grid->size + x + i * grid->size]->next =
+                  grid->cells[y * grid->size + x + (i + 1) * grid->size];
+
+            product *= grid->cells[y * grid->size + x + i * grid->size]->value;
+          }
+
+          for (unsigned short i = 0; i < length; i++)
+            grid->cells[y * grid->size + x + i * grid->size]->room_product =
+                product;
+        }
+
+        /* rightwards */
+        else {
+          unsigned short length = rand() % (grid->size - x) + 1;
+          unsigned long long product = 1;
+
+          for (unsigned short i = 0; i < length; i++) {
+            /* room length */
+            grid->cells[y * grid->size + x + i]->room_length = length;
+
+            /* previous */
+            if (i > 0)
+              grid->cells[y * grid->size + x + i]->previous =
+                  grid->cells[y * grid->size + x + i - 1];
+
+            /* next */
+            if (i < length - 1)
+              grid->cells[y * grid->size + x + i]->next =
+                  grid->cells[y * grid->size + x + i + 1];
+
+            product *= grid->cells[y * grid->size + x + i]->value;
+          }
+
+          for (unsigned short i = 0; i < length; i++)
+            grid->cells[y * grid->size + x + i]->room_product = product;
+        }
+      }
+    }
+  }
+
+  return grid;
+}
+
+/* Randomly generates the value of the cell whose coordinates are given as arguments and returns 1. Returns 0 if no values can be assigned to the cell in a way that will keep the grid valid. */
+static int randomize_cell_value(grid_t* grid, unsigned int x, unsigned int y) {
+  uint64_t cell_value_orig = grid->cells[y * grid->size + x]->value;
+  uint64_t cell_value = cell_value_orig;
+  
+  unsigned short nb_values = popcount_preprocessor(cell_value);
+  
+  while (nb_values > 0) {
+    /* Randomly pick one of the possibilities */
+    unsigned short set_bit_index = rand() % nb_values + 1;
+    
+    /* Find the corresponding bit */
+    unsigned short bit_to_set = 0, set_bits = 0;
+    while (set_bits != set_bit_index) {
+      bit_to_set++;
+      
+      if (check_bit(cell_value, bit_to_set) == 1)
+        set_bits++;      
+    }
+    
+    /* Clear possibility for all cells on this row */
+    for (unsigned short j = 0; j < grid->size; j++)
+      grid->cells[y * grid->size + j]->value = clear_bit(grid->cells[y * grid->size + j]->value, bit_to_set);
+      
+    /* Clear possibility for all cells on this column */
+    for (unsigned short j = 0; j < grid->size; j++)
+      grid->cells[j * grid->size + x]->value = clear_bit(grid->cells[j * grid->size + x]->value, bit_to_set);
+      
+    /* Set this cell to have only this bit set */
+    grid->cells[y * grid->size + x]->value = 0;
+    grid->cells[y * grid->size + x]->value = set_bit(grid->cells[y * grid->size + x]->value, bit_to_set);
+    
+    /* Get next cell coordinates */
+    unsigned int new_x = x + 1;
+    unsigned int new_y = y;
+
+    /* If we have reached the end of the row */
+    if (new_x >= grid->size) {
+      new_x = 0;
+      new_y++;
+    }
+
+    /* If we have reached the end of the grid, mark cell as valid */
+    if (new_y >= grid->size)
+      return 1;
+
+    /* Otherwise, we proceed to the next cell */
+    else {
+      /* If the next cell has been validated, valid this one as well */
+      if (randomize_cell_value(grid, new_x, new_y) == 1)
+        return 1;
+
+      /* If the next cell is invalid, revert changes applied and try another number */
+      else {
+        /* Readd possibility for all cells on this row */
+        for (unsigned short j = 0; j < grid->size; j++)
+          grid->cells[y * grid->size + j]->value = set_bit(grid->cells[y * grid->size + j]->value, bit_to_set);
+          
+        /* Readd possibility for all cells on this column */
+        for (unsigned short j = 0; j < grid->size; j++)
+          grid->cells[j * grid->size + x]->value = set_bit(grid->cells[j * grid->size + x]->value, bit_to_set);
+      
+        /* Update possibilities */
+        cell_value = clear_bit(cell_value, bit_to_set);
+        nb_values--;
+      }
+    }
+  }
+  
+  /* If no values are possible, reset cell and return 0 */
+  grid->cells[y * grid->size + x]->value = cell_value_orig;
+  
+  return 0;
+}
+
+/* Converts the value of every cell in the grid in such a way that the position of the only bit set within the grid becomes its value. */
+static void convert_bits_to_values(grid_t* grid) {
+  for (unsigned int y = 0; y < grid->size; y++)
+    for (unsigned int x = 0; x < grid->size; x++)
+      grid->cells[y * grid->size + x]->value = find_singleton_position(grid->cells[y * grid->size + x]->value);
+}
+
+/* Generates and returns a new grid. */
+static grid_t* generate_grid(size_t size) {
+  if (size > MAX_GRID_SIZE) {
+    printf("The size of the generated grid should be at most %d.\n",
+           MAX_GRID_SIZE);
+    return NULL;
+  }
+
+  grid_t* grid = initialize_grid(size);
+
+  /* Set all cells to default value */
+  uint64_t default_bits = 0;
+  for (unsigned int i = 0; i< size; i++)
+    default_bits = set_bit(default_bits, i+1);
+  
+  for (unsigned int y = 0; y < size; y++)
+    for (unsigned int x = 0; x < size; x++)
+      grid->cells[y * grid->size + x]->value = default_bits;
+  
+  /* Randomly fill all cells */
+  srand(time(NULL));
+  randomize_cell_value(grid, 0, 0);
+  
+  /* Convert bits to appropriate values */
+  convert_bits_to_values(grid);
+
+  /* Make rooms randomly with the cells we have */
+  return random_even_rooms(grid);
+}
+
+/* Main function.
+Currently the program can only have one argument which is the name of the file
+to read in order to resolve the grid coded in it.
+For now the function fills all single-celled rooms in the grid and checks if the
+result is a valid grid.
+It thens lists all cells in the std output and prints a formatted grid of the
+result to a new file. */
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+    exit(EXIT_FAILURE);
+  }
+
+  printf("Program starting!\n\n");
+
+  /* Read the input file */
+  grid_t* grid = read_file(argv[1]);
+
+  /* Attempts to solve the grid */
+  if (solve_grid(grid) == 1)
+    printf("The grid is valid.\n");
+  else
+    printf("The grid is invalid.\n");
+
+  /* Checks if the grid is valid. This function is not needed at the moment as
+   * solve_grid provides that informatation, it is set here to avoid warnings
+   * when compiling. */
+  check_grid(grid);
+
+  /* Listing each cell with relevant values in console */
+  print_values_in_grid(grid);
+
+  /* Shows the number of cells solved by heuristics alone */
+  printf("Heuristics made : %d\n\n", grid->heuristics);
+
+  /* Make a new file with the output grid */
+  print_grid(grid);
+
+  /* Clean up memory */
+  free_grid(grid);
+
+  /* Generates a grid */
+  grid_t* grid_generated = generate_grid(5);
+
+  /* Output generated grid to a file */
+  print_values_in_grid(grid_generated);
+
+  /* Clean up memory */
+  free_grid(grid_generated);
+
+  printf("Program ending!\n");
+
+  return 0;
+}

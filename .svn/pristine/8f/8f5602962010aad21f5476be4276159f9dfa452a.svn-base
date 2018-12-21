@@ -1,0 +1,49 @@
+#ifndef HASHIWOKAKERO_H_INCLUDED
+#define HASHIWOKAKERO_H_INCLUDED
+
+int sizeGrid = 6; // taille de la grille.
+const int intToChar = 48; // constante pour convertir les entiers en caract�re ou vice versa
+int nbIsland;
+typedef struct Island Island;
+typedef struct Grid Grid;
+
+void fillGrid(FILE *_file, Grid *grid);
+void fillGridNeighbor(Grid *grid);
+void printGrid(int **grid); // pour afficher la grille dans la console.
+void printGridInFile(int** grid); // pour �crire la grille dans un fichier "hashiOutput.txt".
+int getNbIsland(FILE *_file);
+
+struct Grid
+{
+  Island *islands;
+};
+
+struct Island
+{
+  int x; // position en x
+  int y; // position en y
+
+  int value;
+  int finished;
+
+  // voisin
+  Island *upNeighbor;
+  Island *downNeighbor;
+  Island *leftNeighbor;
+  Island *rightNeighbor;
+
+  // île liée
+  Island *linkedUpIsland;
+  Island *linkedDownIsland;
+  Island *linkedLeftIsland;
+  Island *linkedRightIsland;
+
+  // nombre de ponts
+  int nbBridgeUp;
+  int nbBridgeDown;
+  int nbBridgeLeft;
+  int nbBridgeRight;
+
+};
+
+#endif // HASHIWOKAKERO_H_INCLUDED

@@ -1,0 +1,9 @@
+#ifndef BITSET_H
+#define BITSET_H
+
+#include <stdint.h>
+
+int
+equals (uint64_t value1, uint64_t value2);
+
+#endif /* BITSET_H */

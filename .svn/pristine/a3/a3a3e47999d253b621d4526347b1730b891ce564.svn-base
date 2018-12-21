@@ -1,0 +1,16 @@
+#ifndef COMPOSITES_H
+#define COMPOSITES_H
+
+#include <stdint.h>
+
+typedef struct composite_t Composite;
+
+typedef struct composites_set_t CompositesSet;
+
+void free_composites_set(CompositesSet* set);
+
+void print_composites_set(CompositesSet* set);
+
+CompositesSet* find_composites(int product);
+
+#endif /* COMPOSITES_H */

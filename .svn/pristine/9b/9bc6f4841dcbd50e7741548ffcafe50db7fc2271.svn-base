@@ -1,0 +1,41 @@
+#ifndef INSHI_H
+#define INSHI_H
+
+#define VERSION 0.2.2
+
+#define MAX_SIZE 16
+
+typedef struct cell_t Cell;
+typedef struct grid_t Grid;
+
+void printGrid (Grid* grid);
+
+Grid* readFile (const char *path);
+
+Grid* initializeGrid (int size);
+
+unsigned int setRightwardRoom (Grid *grid, unsigned int currentCell, unsigned long long roomValue, unsigned short roomLength);
+
+unsigned int setDownwardRoom (Grid *grid, unsigned int currentCell, unsigned long long roomValue, unsigned short roomLength);
+
+void printValuesInGrid (Grid *grid);
+
+void freeGrid (Grid *grid);
+
+void fillSingleCells (Grid *grid);
+
+int checkGrid (Grid *grid);
+
+int checkCell (Grid *grid, unsigned int x, unsigned int y);
+
+int checkRow (Grid *grid, unsigned int x, unsigned int y);
+
+int checkCol (Grid *grid, unsigned int x, unsigned int y);
+
+int checkRoom (Grid *grid, unsigned int x, unsigned int y);
+
+int resolutionBruteForce (Grid *grid);
+
+int resolutionBruteForceCell (Grid *grid, unsigned int x, unsigned int y);
+
+#endif /* INSHI_H */

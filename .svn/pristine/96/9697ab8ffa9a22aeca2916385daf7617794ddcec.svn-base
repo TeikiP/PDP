@@ -1,0 +1,458 @@
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+
+#include "inshiNoHeya.h"
+
+struct cell_t {
+        /* Value within the cell. */
+        uint64_t value;
+        /* Required product for cells in the current room. */
+        unsigned long long roomProduct;
+        /* Sets of factors that make up this roomProduct. */
+        //CompositesSet *compositesSet;
+        /* Previous cell in the current room. */
+        Cell *previous;
+        /* Next cell in the current room. */
+        Cell *next;
+};
+
+struct grid_t {
+        /* Grid that we are working on. */
+        Cell **cells;
+        /* Size of this grid. */
+        size_t size;
+};
+
+struct composite_t {
+        /* Factor that makes up the factorized number. */
+        uint64_t factor;
+        /* Next factor that makes up the factorized number. */
+        Composite *next;
+};
+
+struct composites_set_t {
+        /* First factor that makes up this number. */
+        Composite *firstFactor;
+        /* Next set of factors that make up this same number. */
+        CompositesSet *next;
+};
+
+
+/* MAIN */
+int
+main (int argc, char **argv) {
+        if (argc < 2) {
+                fprintf(stderr, "Usage: %s <file> (ex: %s ../test/5x5_Easy)\n", argv[0], argv[0]);
+                exit(EXIT_FAILURE);
+        }
+
+        printf("Program starting!\n");
+  
+        Grid *grid = readFile(argv[1]);
+  
+        //CompositesSet *tmpSet = findComposites(36);  
+        //printCompositesSets(tmpSet);
+
+
+        /*grid->cells[0]->value = 2;
+        grid->cells[10]->value = 10;
+        grid->cells[15]->value = 15;*/
+
+        printValuesInGrid(grid);
+
+        printGrid(grid);
+
+        freeGrid(grid);
+
+        printf("Program ending!\n");
+
+        return 0;
+}
+
+/* Allocates, initializes and returns a new Composite. */
+Composite*
+generateEmptyComposite () {
+        Composite *newComposite = malloc(sizeof(Composite));
+        newComposite->factor = 0;
+        newComposite->next = NULL;
+        
+        return newComposite;
+}
+
+/* Allocates, initializes and returns a new CompositesSet. */
+CompositesSet*
+generateEmptySet () {
+        CompositesSet *newSet = malloc(sizeof(CompositesSet));
+        newSet->firstFactor = generateEmptyComposite();
+        newSet->next = NULL;
+        
+        return newSet;
+}
+
+/* Deallocates a Composite and all linked Composites. */
+void
+freeComposite (Composite *composite) {
+        while (composite->next != NULL)
+                freeComposite(composite->next);
+                
+        free(composite);
+}
+
+/* Deallocates a CompositesSet and all linked CompositesSets. */
+void
+freeCompositesSet (CompositesSet *set) {
+        while (set->next != NULL)
+                freeCompositesSet(set->next);
+        
+        freeComposite(set->firstFactor);
+        free(set);
+}
+
+/* Prints all values of Composites within linked CompositesSets. */
+void
+printCompositesSets (CompositesSet *set) {
+        while (set != NULL) {
+                Composite *factor = set->firstFactor;
+
+                while (factor != NULL) {
+                        printf("%lu ", factor->factor);
+                        
+                        factor = factor->next;
+                }
+                
+                printf("\n");
+
+                set = set->next;
+        }
+}
+
+/* Find and returns CompositesSets that make up the product given as an argument. */
+CompositesSet*
+findComposites (int product) {
+        CompositesSet *startingSet = generateEmptySet();
+        CompositesSet *iterator = startingSet;
+        
+        /* Trial division */
+        unsigned int limit = floor(sqrt(product));
+                
+        for (unsigned int factor=1; factor<=limit; factor++) {
+                if (product % factor == 0 && product / factor != factor) {
+                        addCompositesToSet(iterator->firstFactor, factor, product/factor);
+                        
+                        iterator->next = generateEmptySet();
+                        iterator = iterator->next;
+                }
+        }
+        
+        free(iterator);
+        
+        return startingSet;
+}
+
+/* Not functional. */
+/* Find and returns Composites that make up the product given as an argument and add it to a preexisting CompositesSet. */
+CompositesSet*
+findSubComposites (unsigned int originalFactor, int product, CompositesSet *originalSet) {        
+        /* Trial division */
+        unsigned int limit = floor(sqrt(product));
+        
+        for (unsigned int factor=1; factor<=limit; factor++) {
+                if (product % factor == 0 && product / factor != factor) {
+                        int isAlreadyPresent = 0;
+                        
+                        if (originalFactor == factor || originalFactor == product/factor) {
+                                isAlreadyPresent = 1;
+                        }
+                        
+                        else {
+                                Composite *iterator = originalSet->firstFactor;
+                                while (iterator != NULL) {
+                                        if (iterator->factor == factor || iterator->factor == product/factor) {
+                                                isAlreadyPresent = 1;
+                                                break;
+                                        }
+                                
+                                        iterator = iterator->next;                        
+                                }
+                        }                           
+                        
+                        if (isAlreadyPresent == 0) {
+                                Composite *newComposite = copyComposite(originalSet->firstFactor);
+                                
+                                addCompositeToSet(newComposite, originalFactor);
+                                addCompositesToSet(newComposite, factor, product/factor);
+                                
+                                CompositesSet *iterator = originalSet;
+                                while (iterator->next != NULL)
+                                        iterator = iterator->next;
+                                
+                                iterator->next = generateEmptySet();
+                                iterator = iterator->next;
+                                iterator->firstFactor = newComposite;
+                        }
+                        
+                        /*if (i != 1)
+                                findCompositeNumbers (x/i);*/
+                }
+        }
+        
+        
+        return originalSet;
+}
+
+/* Adds the factor given as the last element to the Composite linked list given. */
+void
+addCompositeToSet (Composite *firstFactor, uint64_t factor) {
+        Composite *currFactor = firstFactor;
+        
+        while (currFactor->next != NULL)
+                currFactor = currFactor->next;
+                        
+        if (currFactor->factor != 0) {
+                currFactor->next = generateEmptyComposite();
+                currFactor = currFactor->next;
+        }
+        
+        currFactor->factor = factor;
+}
+
+/* Adds the factors given as the lasts elements to the Composite linked list given. */
+void
+addCompositesToSet (Composite *firstFactor, uint64_t factor1, uint64_t factor2) {
+        Composite *currFactor = firstFactor;
+        
+        while (currFactor->next != NULL)
+                currFactor = currFactor->next;
+                        
+        if (currFactor->factor != 0) {
+                currFactor->next = generateEmptyComposite();
+                currFactor = currFactor->next;
+        }
+        
+        currFactor->factor = factor1;
+        
+        currFactor->next = generateEmptyComposite();
+        currFactor = currFactor->next;
+        currFactor->factor = factor2;
+}
+
+/* Takes a composite and returns a new one with the exact same values for it and its linked Composites. */
+Composite*
+copyComposite (Composite *compositeToCopy) {
+        Composite *tmpComposite = compositeToCopy;
+        
+        Composite *newComposite = malloc(sizeof(Composite));
+        
+        newComposite->factor = tmpComposite->factor;
+        
+        Composite *compositeTracker = newComposite;
+        
+        while (tmpComposite->next != NULL) {
+                tmpComposite = tmpComposite->next;
+                
+                compositeTracker->next = malloc(sizeof(Composite));
+                compositeTracker = compositeTracker->next;
+                compositeTracker->factor = tmpComposite->factor;
+                
+        }
+        
+        compositeTracker->next = NULL;
+        
+        return newComposite;
+}
+
+/* Affiche la grille dans un fichier de sortie. */
+void
+printGrid (Grid *grid) {
+        FILE* outputFile = fopen ("out.txt", "w");
+
+        int size = grid->size;
+
+        for (int k = 0 ; k < size ; k++) {
+                fprintf (outputFile, "  ___ ");  
+        }
+
+        for (int i = 0 ; i < size ; i++) {
+                fprintf (outputFile, "\n| ");
+
+                for (int j = 0 ; j < size ; j++) {
+                        if (grid->cells[i*size+j]->value < 10)
+                                fprintf (outputFile, " %" PRIu64 " ", grid->cells[i*size+j]->value);
+                        else if (grid->cells[i*size+j]->value < 100)
+                                fprintf (outputFile, "%" PRIu64 " ", grid->cells[i*size+j]->value);
+                        else
+                                fprintf (outputFile, "%" PRIu64, grid->cells[i*size+j]->value);
+
+                        if (j == size - 1)
+                                fprintf (outputFile, " |\n| ");
+                        else if (grid->cells[i*size+j]->next == grid->cells[i*size+j+1])
+                                fprintf (outputFile, "   ");
+                        else
+                                fprintf (outputFile, " | ");
+
+                }
+
+                for (int j = 0 ; j < size ; j++) {
+                        if (j == size)
+                                fprintf (outputFile, " |");
+                        else if (grid->cells[i*size+j]->next == grid->cells[(i+1)*size+j])
+                                fprintf (outputFile, "   ");
+                        else
+                                fprintf (outputFile, "___");
+
+                        fprintf (outputFile, "   ");
+                }
+        }
+
+        fclose(outputFile);
+}
+
+
+/* Lit une grille a partir d'un fichier. */
+Grid*
+readFile (const char *path) {
+        const char rightDelimiter = 'r';
+        const char bottomDelimiter = 'b';
+        char line[256];
+
+        unsigned long long roomValue = 0;
+        unsigned short roomLength = 0;
+        unsigned short gridSize = 0;
+
+        unsigned int i = 0;
+        unsigned int currentCell = 0;
+
+
+        Grid *grid = NULL;
+        FILE *inputFile = fopen(path, "r");
+
+        if (inputFile != NULL) {
+                fscanf(inputFile, "%s", line);
+
+                gridSize = atoll(line);
+
+                if (gridSize < MAX_SIZE)
+                        grid = initializeGrid(gridSize);
+
+                while (fscanf(inputFile, "%s", line) != EOF) {
+                        while (line[i] >= '0' && line[i] <= '9') {
+                                roomValue = roomValue * 10 + line[i++] - '0';
+                        }
+
+                        if (roomValue == 0)
+                                printf("Error in input file format.\n");
+
+                        if (line[i] == rightDelimiter) {
+                                i++;
+
+                                while (line[i] >= '0' && line[i] <= '9') {
+                                        roomLength = roomLength * 10 + line[i++] - '0';
+                                }
+
+                                currentCell = setRightwardRoom(grid, currentCell, roomValue, roomLength);
+                        }
+
+                        else if (line[i] == bottomDelimiter) {
+                                i++;
+
+                                while (line[i] >= '0' && line[i] <= '9') {
+                                        roomLength = roomLength * 10 + line[i++] - '0';
+                                }
+
+                                currentCell = setDownwardRoom(grid, currentCell, roomValue, roomLength);
+                        }
+
+                        else
+                        printf("Error in input file format.\n");
+
+                        i = 0;
+                        roomValue = 0;
+                        roomLength = 0;      
+                }
+        }
+
+        else
+                printf("Error reading input file.\n");
+
+        return grid;
+}
+
+/* Assigne une salle horizontale aux cases correspondantes et renvoie la nouvelle position dans la grille. */
+unsigned int
+setRightwardRoom (Grid *grid, unsigned int currentCell, unsigned long long roomValue, unsigned short roomLength) {
+        while (grid->cells[currentCell]->roomProduct != 0)
+                currentCell++;
+
+        for (unsigned short i=0; i<roomLength; i++) {
+                grid->cells[currentCell+i]->roomProduct = roomValue;
+
+                if (i<roomLength-1)
+                        grid->cells[currentCell+i]->next = grid->cells[currentCell+(i+1)];
+        }
+
+        return currentCell+roomLength;
+}
+
+/* Assigne une salle verticale aux cases correspondantes et renvoie la nouvelle position dans la grille. */
+unsigned int
+setDownwardRoom (Grid *grid, unsigned int currentCell, unsigned long long roomValue, unsigned short roomLength) {
+        while (grid->cells[currentCell]->roomProduct != 0)
+                currentCell++;
+
+        for (unsigned short i=0; i<roomLength; i++) {
+                grid->cells[currentCell+i*grid->size]->roomProduct = roomValue;
+
+                if (i<roomLength-1)
+                        grid->cells[currentCell+i*grid->size]->next = grid->cells[currentCell+(i+1)*grid->size];
+        }
+
+        return currentCell+1;
+}
+
+/* Creer une nouvelle grille vide et renvoie son pointeur. */
+Grid*
+initializeGrid (int size) {
+        Grid *grid = malloc(sizeof(Grid));
+
+        grid->size = size;  
+        grid->cells = malloc(sizeof(Cell*) * grid->size * grid->size);
+
+        for (unsigned int i=0; i<grid->size; i++)
+                for (unsigned int j=0; j<grid->size; j++) {
+                        grid->cells[i*grid->size+j] = malloc(sizeof(Cell));
+
+                        grid->cells[i*grid->size+j]->value = 0;
+                        grid->cells[i*grid->size+j]->roomProduct = 0;
+                        grid->cells[i*grid->size+j]->next = NULL;
+                }
+
+        return grid;
+}
+
+/* Affiche une liste des valeurs de chaque cases de la grille. */
+void
+printValuesInGrid (Grid *grid) {
+        printf("\nPrinting values in grid :\n");
+
+        for (unsigned int i=0; i<grid->size; i++)
+                for (unsigned int j=0; j<grid->size; j++)      
+                        printf("Cell (%d,%d) = %lu [%llu]\n", i, j, grid->cells[i*grid->size+j]->value, grid->cells[i*grid->size+j]->roomProduct);
+
+        printf("\n");
+}
+
+/* Libere l'espace en memoire utilise par la grille. */
+void
+freeGrid (Grid *grid) {
+        for (unsigned int i=0; i<grid->size; i++)
+                for (unsigned int j=0; j<grid->size; j++)
+                        free(grid->cells[i*grid->size+j]);
+
+
+        free(grid->cells);
+        free(grid);
+}

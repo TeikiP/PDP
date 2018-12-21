@@ -1,0 +1,34 @@
+CFLAGS   = -Wall -Wextra -std=gnu99
+LDFLAGS  = -lm
+
+DBGFLAGS = -g
+SANFLAGS = -fsanitize=address -fsanitize=leak -fsanitize=undefined
+GPRFLAGS = -pg
+
+BIN      = inshiNoHeya
+FILES    = composites.c bitset.c inshiNoHeya.c
+
+.PHONY: all clean cleanall
+
+all: $(BIN)
+
+inshiNoHeya: $(FILES)
+	$(CC) $(CFLAGS) $(FILES) $(LDFLAGS) -o $(BIN)
+
+test: $(BIN)
+	@(./$(BIN) ../test/3x3_Custom)
+
+debug: $(FILES)
+	$(CC) $(CFLAGS) $(DBGFLAGS) $(FILES) $(LDFLAGS) -o $(BIN)
+
+sanitize: $(FILES)
+	$(CC) $(CFLAGS) $(SANFLAGS) $(FILES) $(LDFLAGS) -o $(BIN)
+
+gprof: $(FILES)
+	$(CC) $(CFLAGS) $(GPRFLAGS) $(FILES) $(LDFLAGS) -o $(BIN)
+
+clean:
+	@(rm -f *.o *~)
+
+cleanall: clean
+	@(rm -f *.grid $(BIN))

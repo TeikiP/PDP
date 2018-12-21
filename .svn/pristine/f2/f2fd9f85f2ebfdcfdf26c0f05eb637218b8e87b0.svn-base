@@ -1,0 +1,15 @@
+CPPFLAGS = -I. 
+CFLAGS   = -Wall -Wextra -std=c99
+LDFLAGS  = -lm
+
+BIN      = hashiwokakero
+
+.PHONY: all clean cleanall
+
+all: $(BIN) $(CFLAGS)
+
+clean:
+	@(rm -f *.o *~)
+
+cleanall: clean
+	@(rm -f *.grid $(BIN))

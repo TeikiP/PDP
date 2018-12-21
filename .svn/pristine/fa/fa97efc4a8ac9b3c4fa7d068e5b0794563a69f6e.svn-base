@@ -1,0 +1,19 @@
+#include "bitset.h"
+
+#include <stdint.h>
+
+/* Tests if the two given values are equal, returns 1 if true, 0 otherwise. */
+short equals(uint64_t value1, uint64_t value2) {
+  return value1 == value2;
+}
+
+/* Sets the bit at a specific position of the provided value to 1. */
+uint64_t set_bit(uint64_t value, short position) {
+  return value |= 1ULL << position;
+}
+
+/* Sets the bit at a specific position of the provided value to 0. */
+uint64_t clear_bit(uint64_t value, short position) {
+  return value &= ~(1ULL << position);
+}
+

@@ -1,0 +1,88 @@
+#ifndef ISLAND_H_INCLUDED
+#define ISLAND_H_INCLUDED
+
+#include <stdio.h>
+#include <stdlib.h>
+
+/* position of the lowest bit of the following */
+#define POS_BIT_FINISHED 4
+#define POS_BIT_NB_BRIDGE_UP 11
+#define POS_BIT_NB_BRIDGE_DOWN 9
+#define POS_BIT_NB_BRIDGE_LEFT 7
+#define POS_BIT_NB_BRIDGE_RIGHT 5
+
+/* Value of the bit(s) of the following */
+#define BIT_VALUE 0x000F
+#define BIT_FINISHED 0x0010
+#define BIT_NB_BRIDGE_UP 0x1800
+#define BIT_NB_BRIDGE_DOWN 0x0600
+#define BIT_NB_BRIDGE_LEFT 0x0180
+#define BIT_NB_BRIDGE_RIGHT 0x0060
+
+/* structure to store the informations of the islands */
+typedef struct Island Island;
+/* structure to store all the islands */
+typedef struct Grid Grid;
+typedef struct heap_s* heap;
+
+struct Island {
+  unsigned x;  /* Position X */
+  unsigned y;  /* Position Y */
+
+  unsigned information_island;
+
+  /* Neighbor */
+  Island* up_neighbor;
+  Island* down_neighbor;
+  Island* left_neighbor;
+  Island* right_neighbor;
+
+  /* Linked island */
+  Island* linked_up_island;
+  Island* linked_down_island;
+  Island* linked_left_island;
+  Island* linked_right_island;
+};
+
+struct Grid {
+  int* bridges;
+  int pos;
+  Island* islands;
+};
+
+struct heap_s
+{
+	Grid *tab;
+	int size;
+	int capacity;
+};
+
+/* Returns the value of the island */
+unsigned get_value(unsigned info_island);
+/* Returns the status finished of the island */
+unsigned get_finished(unsigned info_island);
+/* Returns the number of bridges above the island */
+unsigned get_nb_bridge_up(unsigned info_island);
+/* Returns the number of bridges under the island */
+unsigned get_nb_bridge_down(unsigned info_island);
+/* Returns the number of bridges on the left of the island */
+unsigned get_nb_bridge_left(unsigned info_island);
+/* Returns the number of bridges on the right of the island */
+unsigned get_nb_bridge_right(unsigned info_island);
+
+/* Sets the new value of the status finished of the island */
+void set_finished(unsigned *info_island, unsigned finished);
+/* Sets the new value of the number of bridges above the island */
+void set_nb_bridge_up(unsigned *info_island, unsigned nb_bridge_up);
+/* Sets the new value of the number of bridges under the island */
+void set_nb_bridge_down(unsigned *info_island, unsigned nb_bridge_down);
+/* Sets the new value of the number of bridges on the left of the island */
+void set_nb_bridge_left(unsigned *info_island, unsigned nb_bridge_left);
+/* Sets the new value of the number of bridges on the right of the island */
+void set_nb_bridge_right(unsigned *info_island, unsigned nb_bridge_right);
+/* Create a heap to be used for backtracking */
+heap create_heap();
+/* Copy a game */
+void copy_game(Grid* src, Grid dst, int size_grid, int nb_island);
+
+#endif // ISLAND_H_INCLUDED

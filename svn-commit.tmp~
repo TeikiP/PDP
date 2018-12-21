@@ -1,0 +1,10 @@
+
+--Cette ligne, et les suivantes ci-dessous, seront ignorées--
+
+A  + Analyse des besoins
+A  + Release
+D    branches
+D    tags
+D    trunk/Analyse des besoins
+D    trunk/Release
+D    website

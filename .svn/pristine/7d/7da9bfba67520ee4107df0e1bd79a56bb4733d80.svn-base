@@ -1,0 +1,43 @@
+-- Inshi No Heya and Hashiwokakero game solver --
+
+INSTALL :
+
+To compile both solvers, just run "make" at the root of this directory.
+If you want to compile only one of those solvers, simply go in the solver directory then run "make"
+
+UNINSTALL :
+
+You can use "make cleanall" to remove any binary files you've made. As for the installation, you can
+do it for both solvers at once or only one.
+
+
+------ Current state of the solvers -----
+
+The Hashiwokakero solver can resolve grids from different square sizes (at least, the ones we tried).
+It also can detects badly encoded grids. See "How to use" section below.
+
+
+
+
+
+
+
+------ HOW TO USE ------
+
+CREATING A GRID :
+
+The encoding used for Hashiwokakero is fairly simple : just create a plain text file and create your grid using
+thoses characters (each line in the file being a line on the graph):
+
+- _ for an empty slot
+- A number between 1 and 8 to indicate the value of the island.
+
+Any other character (even a blank) will result in a "invalid character" error.
+
+USING THE SOLVER BINARY :
+
+You can resolve a grid by calling the Hashiwokakero binary file and using the path of the grid file as a first argument.
+Example : "./hashiwokakero ../test/test1.txt"
+
+Some test grids are bundled with the sovler. See the test directory to find them and read tests.txt for a short description
+of what result you should expect.

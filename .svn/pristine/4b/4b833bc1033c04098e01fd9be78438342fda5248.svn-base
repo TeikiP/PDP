@@ -1,0 +1,103 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#ifndef HASHIWOKAKERO_H_INCLUDED
+#define HASHIWOKAKERO_H_INCLUDED
+
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+
+int pos = 0;
+int sizeGrid = 6; /* size of the grid */
+const int int_to_char = 48; /* constant to translate an int into a char*/
+int nb_island; /* number of islands */
+
+/* structure to store the informations of the islands */
+typedef struct Island Island;
+/* structure to store all the islands */
+typedef struct Grid Grid;
+
+/* Checks the absolute distance between two integers. static int distance(int a, int b);
+
+/* Checks if the game is solved. Returns 1 if it's the case, 0 if not. */
+static int is_game_over(Grid* grid);
+
+/* Concatenate two integers. Used to encode 2 pairs of coordonates inside the
+ * bridges array. */
+static int concatenate(int x, int y);
+
+/* Locks the way where a bridge is drawn. It simply copies the concatenation of
+ * the coordonates inside the array bridge. */
+static void lock(Island* islands, Island* islandt, int dir, int bridges[]);
+
+/* Checks if a way is locked, and delete the neighbor if it's the case. */
+static int is_locked(Island* islands, Island* islandt, int dir, int bridges[]);
+/* Checks the file and returns the number of islands */static int get_nb_island(FILE* _file);
+/* Checks the island and returns the number of neighbors */
+static int get_nb_neighbor(Island island);
+/* Checks the island and returns the number of neighbors finished */
+static int get_nb_neighbor_finished(Island island);
+/* Checks the island and returns the number of bridges */
+static int get_nb_bridge(Island island);
+/* Checks the file and fills the grid with the different islands
+    and their informations */
+static void fill_grid(FILE* _file, Grid* grid);
+/* Checks the grid and find the neighbors of each island
+and store the information in the islands */
+static void fill_grid_neighbor(Grid* grid);
+
+/* Not useful anymore */
+/* Used to checks the grid and print it */
+static void print_grid(Grid *grid);
+/* Used to checks the grid and print it in a file */
+void print_grid_in_file(int** grid);
+/* Checks the grid and returns the number of islands finished */
+static int get_nb_island_finished(Grid* grid);
+/* Checks the island and put it to the finished state if the island has
+the right amount of bridges*/
+static void validate_island(Island* island);
+/* Checks the island and if it only has one neighbor then it puts one or two bridges
+between the island and the neighbor */
+static void heuristic_n1(Island* island, int bridges[]);
+/* Checks the island and if it is even and has the value divided by 2 then
+we put two bridges between the island and each of its neighbor */
+static void heuristic_n2(Island* island, int bridges[]);
+static void heuristic_n3(Island* island, int bridges[]);
+static void heuristic_nb6(Island* island, int bridges[]);
+static void heuristic_neighbor_finished(Island* island, int bridges[]);
+static void heuristic_k(Island* island);
+static void simple_solver(Grid* grid, int bridges[]);
+
+struct Grid {
+  Island* islands;
+};
+
+struct Island {
+  int x;  // position en x
+  int y;  // position en y
+
+  int value;
+  int finished;
+
+  // voisin
+  Island* up_neighbor;
+  Island* down_neighbor;
+  Island* left_neighbor;
+  Island* right_neighbor;
+
+  // île liée
+  Island* linked_up_island;
+  Island* linked_down_island;
+  Island* linked_left_island;
+  Island* linked_right_island;
+
+  // nombre de ponts
+  int nb_bridge_up;
+  int nb_bridge_down;
+  int nb_bridge_left;
+  int nb_bridge_right;
+};
+
+#endif  // HASHIWOKAKERO_H_INCLUDED

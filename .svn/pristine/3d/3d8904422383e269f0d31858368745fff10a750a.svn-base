@@ -1,0 +1,220 @@
+#include "composites.h"
+#include "bitset.h"
+
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+
+/* Allocates, initializes and returns a new composites_set_t. */
+composites_set_t* generate_set() {
+  composites_set_t* new_set = malloc(sizeof(composites_set_t));
+  new_set->factors = 0;
+  new_set->next = NULL;
+
+  return new_set;
+}
+
+/* Deallocates a composites_set_t and all linked composites_set_t. */
+void free_composites_set(composites_set_t* set) {
+  while (set != NULL) {
+    composites_set_t* iterator = set->next;
+    free(set);
+    set = iterator;
+  }
+}
+
+/* Returns the number of factors within the given set. */
+unsigned short get_set_length(composites_set_t* set) {
+  return popcount_kernighan(set->factors);
+}
+
+/* Prints all factors within the given and linked composites_set_t. */
+void print_composites_set(composites_set_t* set) {
+  /* For each set */
+  while (set != NULL) {
+    /* For each bit */
+    for (unsigned short i = 0; i < 64; i++)
+      /* If the bit is set, print its position */
+      if (bits_and(set->factors, 1ULL << i))
+        printf("%u ", i + 1);
+
+    printf("\n");
+
+    set = set->next;
+  }
+
+  printf("\n");
+}
+
+/* Deletes all sets that do not have the amount of set bits as specified by the length argument and returns the new starting set. */
+composites_set_t* filter_sets_by_length(composites_set_t* starting_set, unsigned short length) {
+  composites_set_t* iterator = starting_set;
+  composites_set_t* next_iterator = NULL;
+  composites_set_t* valid_tracker = NULL;
+  starting_set = NULL;
+  
+  while (iterator != NULL) {
+    next_iterator = iterator->next;
+    
+    if (get_set_length(iterator) != length)
+      free(iterator);
+     
+    else {
+      if (starting_set == NULL)
+        starting_set = iterator;
+        
+      if (valid_tracker != NULL)
+        valid_tracker->next = iterator;
+        
+      valid_tracker = iterator;
+    }
+    
+    iterator = next_iterator;
+  }
+  
+  valid_tracker->next = NULL;
+  
+  return starting_set;
+}
+
+//TODO static
+/* Appends the sub_set composites_set_t to the main_set, replacing the
+ * factor_to_remove whithin it. */
+composites_set_t* merge_sets(composites_set_t* main_set,
+                             composites_set_t* sub_set,
+                             unsigned short factor_to_remove) {
+  if (main_set != NULL && sub_set != NULL) {
+    /* Find last set in main set */
+    while (main_set->next != NULL)
+      main_set = main_set->next;
+
+    /* Make a copy of the factors of the current main set */
+    uint64_t factors_copy = main_set->factors;
+
+    /* Remove the factor to be replaced from the copied set */
+    factors_copy = clear_bit(factors_copy, factor_to_remove);
+
+    composites_set_t* sub_set_iterator = sub_set;
+
+    do {
+      /* Check if the factors to be merged have any duplicates. */
+      if (bits_and(factors_copy, sub_set_iterator->factors) == 0ULL) {
+        /* Merge the factors and add them at the end of the main set */
+        main_set->next = generate_set();
+        main_set = main_set->next;
+        main_set->factors = bits_or(factors_copy, sub_set_iterator->factors);
+      }
+
+      /* Repeat for next set in sub_set */
+      sub_set_iterator = sub_set_iterator->next;
+    } while (sub_set_iterator != NULL);
+
+    /* Free unused memory */
+    free_composites_set(sub_set);
+  }
+
+  return main_set;
+}
+
+/* Finds and returns composites_set_t that make up the product given as an
+ * argument, with max size being the upper limit that a factor can be. Does not
+ * give '1' nor the product itself as valid factors. */
+composites_set_t* find_subsets(unsigned int product, unsigned int max_size) {
+  composites_set_t* starting_set = generate_set();
+  composites_set_t* iterator = starting_set;
+
+  /* Search ceiling defined by grid size or square root of the product */
+  unsigned int upper_limit =
+      floor(sqrt(product)) > max_size ? max_size : floor(sqrt(product));
+
+  /* Trial division */
+  for (unsigned int factor = 2; factor <= upper_limit; factor++) {
+    if (product % factor == 0 && product / factor != factor) {
+      /* Add both factors found */
+      iterator->next = generate_set();
+      iterator = iterator->next;
+      iterator->factors = set_bit(iterator->factors, factor);
+      iterator->factors = set_bit(iterator->factors, product / factor);
+
+      /* Subfactorisation */
+      composites_set_t* sub_sets = find_subsets(factor, max_size);
+      iterator = merge_sets(iterator, sub_sets, factor);
+
+      sub_sets = find_subsets(product / factor, max_size);
+      iterator = merge_sets(iterator, sub_sets, product / factor);
+    }
+  }
+
+  /* Clean up */
+  iterator = starting_set;
+  starting_set = starting_set->next;
+  free(iterator);
+
+  return starting_set;
+}
+
+/* Finds and returns composites_set_t that make up the product given as an
+ * argument, with max size being the upper limit that a factor can be. */
+composites_set_t* find_composites(unsigned int product, unsigned int max_size, unsigned short length) {
+  composites_set_t* starting_set = generate_set();
+  composites_set_t* iterator = starting_set;
+
+  if (product <= max_size) {
+    /* Add (product) */
+    iterator->next = generate_set();
+    iterator = iterator->next;
+    iterator->factors = set_bit(iterator->factors, product);
+
+    if (product != 1) {
+      /* Add (product * 1) */
+      iterator->next = generate_set();
+      iterator = iterator->next;
+      iterator->factors = set_bit(iterator->factors, 1);
+      iterator->factors = set_bit(iterator->factors, product);
+    }
+  }
+
+  /* Search ceiling defined by grid size or square root of the product */
+  unsigned int upper_limit =
+      floor(sqrt(product)) > max_size ? max_size : floor(sqrt(product));
+
+  /* Trial division */
+  for (unsigned int factor = 2; factor <= upper_limit; factor++) {
+    if (product % factor == 0 && product / factor != factor) {
+      /* Add both factors found */
+      iterator->next = generate_set();
+      iterator = iterator->next;
+      iterator->factors = set_bit(iterator->factors, factor);
+      iterator->factors = set_bit(iterator->factors, product / factor);
+
+      /* Subfactorisation */
+      composites_set_t* sub_sets = find_subsets(factor, max_size);
+      iterator = merge_sets(iterator, sub_sets, factor);
+
+      sub_sets = find_subsets(product / factor, max_size);
+      iterator = merge_sets(iterator, sub_sets, product / factor);
+
+      /* Add both factors and 1 */
+      iterator->next = generate_set();
+      iterator = iterator->next;
+      iterator->factors = set_bit(iterator->factors, 1);
+      iterator->factors = set_bit(iterator->factors, factor);
+      iterator->factors = set_bit(iterator->factors, product / factor);
+
+      /* Subfactorisation with the extra 1 */
+      sub_sets = find_subsets(factor, max_size);
+      iterator = merge_sets(iterator, sub_sets, factor);
+
+      sub_sets = find_subsets(product / factor, max_size);
+      iterator = merge_sets(iterator, sub_sets, product / factor);
+    }
+  }
+
+  /* Delete all sets that do not have the proper length */
+  starting_set = filter_sets_by_length(starting_set, length);
+
+  return starting_set;
+}

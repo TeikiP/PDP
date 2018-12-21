@@ -1,0 +1,63 @@
+-- Inshi No Heya and Hashiwokakero game solver --
+
+INSTALL :
+
+To compile both solvers, just run "make" at the root of this directory.
+If you want to compile only one of those solvers, simply go in the solver directory then run "make".
+
+
+UNINSTALL :
+
+You can use "make cleanall" to remove any binary files you've made. As for the installation, you can
+do it for both solvers at once or only one.
+
+
+------ Current state of the solvers -----
+
+The Hashiwokakero solver can resolve grids from different square sizes (at least, the ones we tried).
+It also can detects badly encoded grids. See "How to use" section below.
+
+The Inshi no Heya solver can resolve grids that have rooms of small size (max 2, or 3 if one of the cells is a "1").
+It will print a message to tell if the grid has been solved or not, and, if it has been, will output the solved grid into a .txt file.
+
+
+------ How to use Hashiwokakero ------
+
+CREATING A GRID :
+
+The encoding used for Hashiwokakero is fairly simple : just create a plain text file and create your grid using
+thoses characters (each line in the file being a line on the graph):
+
+- _ for an empty slot
+- A number between 1 and 8 to indicate the value of the island.
+
+Any other character (even a blank) will result in a "invalid character" error.
+
+USING THE SOLVER BINARY :
+
+You can resolve a grid by calling the Hashiwokakero binary file and using the path of the grid file as a first argument.
+Example : "./hashiwokakero ../test/test1.txt"
+
+Some test grids are bundled with the sovler. See the test directory to find them and read tests.txt for a short description
+of what result you should expect.
+
+
+------ How to use Inshi no Heya ------
+
+CREATING A GRID :
+
+In order to create a grid, you will need to add the following data into a new empty file :
+- the size of the grid on the first line ("5x5" or just "5"),
+- for each room, read from left to right and top to bottom in the grid, a line that tells its
+  product value, 'b' if it goes downwards or 'r' if it goes rightwards, and its length (such as "6b2").
+
+Each room has to be listed only once and on a line on its own.
+
+USING THE SOLVER BINARY :
+
+Similarly to Hashiwokakero, the solver can be called by giving it the path to the file containing the grid to solve.
+Example : "./inshiNoHeya ../test/3x3_Custom".
+
+Tests grids are provided within the test folder. Their names indicate their size and what makes them particular compared
+to the other grids, such as "singles" for a grid that only has rooms of one cell or "invalid" for a grid that is either 
+not readable or not solvable.

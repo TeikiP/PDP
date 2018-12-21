@@ -1,0 +1,235 @@
+#include "island.h"
+
+unsigned get_value(unsigned info_island) {
+    return (info_island & BIT_VALUE) >> POS_BIT_VALUE;
+}
+
+unsigned get_finished(unsigned info_island) {
+    return (info_island & BIT_FINISHED) >> POS_BIT_FINISHED;
+}
+
+unsigned get_nb_bridge_up(unsigned info_island) {
+    return (info_island & BIT_NB_BRIDGE_UP) >> POS_BIT_NB_BRIDGE_UP;
+}
+
+unsigned get_nb_bridge_down(unsigned info_island) {
+    return (info_island & BIT_NB_BRIDGE_DOWN) >> POS_BIT_NB_BRIDGE_DOWN;
+}
+
+unsigned get_nb_bridge_left(unsigned info_island) {
+    return (info_island & BIT_NB_BRIDGE_LEFT) >> POS_BIT_NB_BRIDGE_LEFT;
+}
+
+unsigned get_nb_bridge_right(unsigned info_island) {
+    return (info_island & BIT_NB_BRIDGE_RIGHT) >> POS_BIT_NB_BRIDGE_RIGHT;
+}
+
+unsigned get_up_chosen(unsigned info_backtracking) {
+    return (info_backtracking & BIT_UP_CHOSEN) >> POS_BIT_UP_CHOSEN;
+}
+
+unsigned get_down_chosen(unsigned info_backtracking) {
+    return (info_backtracking & BIT_DOWN_CHOSEN) >> POS_BIT_DOWN_CHOSEN;
+}
+
+unsigned get_left_chosen(unsigned info_backtracking) {
+    return (info_backtracking & BIT_LEFT_CHOSEN) >> POS_BIT_LEFT_CHOSEN;
+}
+
+unsigned get_right_chosen(unsigned info_backtracking) {
+    return (info_backtracking & BIT_RIGHT_CHOSEN) >> POS_BIT_RIGHT_CHOSEN;
+}
+
+unsigned get_stuck_island(unsigned info_backtracking) {
+    return (info_backtracking & BIT_STUCK_ISLAND) >> POS_BIT_STUCK_ISLAND;
+}
+
+unsigned get_x(unsigned position) {
+    return (position & BIT_X) >> POS_BIT_X;
+}
+
+unsigned get_y(unsigned position) {
+    return (position & BIT_Y) >> POS_BIT_Y;
+}
+
+void set_finished(unsigned *info_island, unsigned finished) {
+    *info_island = (*info_island & (0xFFFF - BIT_FINISHED)) | (finished << POS_BIT_FINISHED);
+}
+
+void set_nb_bridge_up(unsigned *info_island, unsigned nb_bridge_up) {
+    *info_island = (*info_island & (0xFFFF - BIT_NB_BRIDGE_UP)) | (nb_bridge_up << POS_BIT_NB_BRIDGE_UP);
+}
+
+void set_nb_bridge_down(unsigned *info_island, unsigned nb_bridge_down) {
+    *info_island = (*info_island & (0xFFFF - BIT_NB_BRIDGE_DOWN)) | (nb_bridge_down << POS_BIT_NB_BRIDGE_DOWN);
+}
+
+void set_nb_bridge_left(unsigned *info_island, unsigned nb_bridge_left) {
+    *info_island = (*info_island & (0xFFFF - BIT_NB_BRIDGE_LEFT)) | (nb_bridge_left << POS_BIT_NB_BRIDGE_LEFT);
+}
+
+void set_nb_bridge_right(unsigned *info_island, unsigned nb_bridge_right) {
+    *info_island = (*info_island & (0xFFFF - BIT_NB_BRIDGE_RIGHT)) | (nb_bridge_right << POS_BIT_NB_BRIDGE_RIGHT);
+}
+
+void set_up_chosen(unsigned *info_backtracking, unsigned up_chosen) {
+    *info_backtracking = (*info_backtracking & (0xFFFF - BIT_UP_CHOSEN)) | (up_chosen << POS_BIT_UP_CHOSEN);
+}
+
+void set_down_chosen(unsigned *info_backtracking, unsigned down_chosen) {
+    *info_backtracking = (*info_backtracking & (0xFFFF - BIT_DOWN_CHOSEN)) | (down_chosen << POS_BIT_DOWN_CHOSEN);
+}
+
+void set_left_chosen(unsigned *info_backtracking, unsigned left_chosen) {
+    *info_backtracking = (*info_backtracking & (0xFFFF - BIT_LEFT_CHOSEN)) | (left_chosen << POS_BIT_LEFT_CHOSEN);
+}
+
+void set_right_chosen(unsigned *info_backtracking, unsigned right_chosen) {
+    *info_backtracking = (*info_backtracking & (0xFFFF - BIT_RIGHT_CHOSEN)) | (right_chosen << POS_BIT_RIGHT_CHOSEN);
+}
+
+void set_stuck_island(unsigned *info_backtracking, unsigned stuck_island) {
+    *info_backtracking = (*info_backtracking & (0xFFFF - BIT_STUCK_ISLAND)) | (stuck_island << POS_BIT_STUCK_ISLAND);
+}
+
+void set_x(unsigned *position, unsigned x) {
+    *position = (*position & (0xFFFF - BIT_X)) | (x << POS_BIT_X);
+}
+
+void set_y(unsigned *position, unsigned y) {
+    *position = (*position & (0xFFFF - BIT_Y)) | (y << POS_BIT_Y);
+}
+
+void initialize(Grid* grid, unsigned size_grid, unsigned nb_island) {
+  grid->bridges = malloc(sizeof(unsigned)*(size_grid*size_grid-nb_island));
+  for(unsigned i = 0; i < (size_grid*size_grid-nb_island); i++){
+    grid->bridges[i]=0;
+  }
+  grid->pos = 0;
+  grid->heuristic_used = 1;
+  grid->chosen_island = NULL;
+
+  /* Allocation de la m�moire pour islands */
+  grid->islands = malloc(sizeof(Island) * nb_island);
+  if (grid->islands == NULL) {
+    fprintf(stderr, "Allocation error.");
+    exit(EXIT_FAILURE);
+  }
+
+  for (unsigned i = 0; i < nb_island; i++) {
+    grid->islands[i].position = 0;
+    grid->islands[i].information_island = 0;
+    grid->islands[i].information_backtracking = 0;
+
+    grid->islands[i].up_neighbor = NULL;
+    grid->islands[i].down_neighbor = NULL;
+    grid->islands[i].left_neighbor = NULL;
+    grid->islands[i].right_neighbor = NULL;
+
+    grid->islands[i].linked_up_island = NULL;
+    grid->islands[i].linked_down_island = NULL;
+    grid->islands[i].linked_left_island = NULL;
+    grid->islands[i].linked_right_island = NULL;
+  }
+}
+
+heap create_heap(){
+	heap h = malloc(sizeof(struct heap_s));
+	if (h == NULL){
+		fprintf(stderr, "problème d'allocation");
+		exit(EXIT_FAILURE);
+	}
+	h->tab = malloc(10*sizeof(Grid));
+	if (h->tab == NULL){
+		fprintf(stderr, "problème d'allocation");
+		exit(EXIT_FAILURE);
+	}
+	h->capacity = 10;
+	h->size = 0;
+	return h;
+}
+
+// bool game_equality(Grid g1, Grid g2){
+//      bool res = true;
+  //
+	// if(game_nb_moves(g1) != game_nb_moves(g2)){ //test des �l�ments des deux jeux
+	// 	res = false;
+	// }
+	// if(game_nb_pieces(g1) != game_nb_pieces(g2) && res){
+	// 	res = false;
+	// }
+	// if(game_width(g1) != game_width(g2) && res){
+	// 	res = false;
+	// }
+	// if(game_height(g1) != game_height(g2) && res){
+	// 	res = false;
+	// }
+	// if (res){
+	// 	for (unsigned i = 0 ; i < game_nb_pieces(g1) ; i++){	//boucle pour tester toutes les pieces des deux jeux
+	// 		if (get_x(game_piece(g1, i)) != get_x(game_piece(g2, i)))
+	// 			res = false;
+	// 		if (get_y(game_piece(g1, i)) != get_y(game_piece(g2, i)))
+	// 			res = false;
+	// 		if (can_move_x(game_piece(g1, i)) != can_move_x(game_piece(g2, i)))
+	// 			res = false;
+	// 		if (can_move_y(game_piece(g1, i)) != can_move_y(game_piece(g2, i)))
+	// 			res = false;
+	// 		if (get_width(game_piece(g1, i)) != get_width(game_piece(g2, i)))
+	// 			res = false;
+	// 	}
+	// }
+//      return res;
+// }
+
+void copy_game(Grid src, Grid *dst, unsigned size_grid, unsigned nb_island){
+    for(unsigned j = 0; j < nb_island; j++){
+    	dst->islands[j].position = src.islands[j].position;
+    	dst->islands[j].information_island = src.islands[j].information_island;
+    	dst->islands[j].information_backtracking = src.islands[j].information_backtracking;
+    	dst->islands[j].up_neighbor = src.islands[j].up_neighbor;
+    	dst->islands[j].down_neighbor = src.islands[j].down_neighbor;
+    	dst->islands[j].left_neighbor = src.islands[j].left_neighbor;
+    	dst->islands[j].right_neighbor = src.islands[j].right_neighbor;
+    	dst->islands[j].linked_up_island = src.islands[j].linked_up_island;
+    	dst->islands[j].linked_down_island = src.islands[j].linked_down_island;
+    	dst->islands[j].linked_left_island = src.islands[j].linked_left_island;
+    	dst->islands[j].linked_right_island = src.islands[j].linked_right_island;
+    }
+    for(unsigned i = 0; i < src.pos; i++){
+    	dst->bridges[i] = src.bridges[i];
+    }
+    for(unsigned i = 0; i < (size_grid*size_grid-nb_island); i++) {
+        dst->bridges[i] = 0;
+    }
+    dst->pos = src.pos;
+    dst->heuristic_used = 1;
+    dst->chosen_island = src.chosen_island;
+}
+
+void delete_game(heap h, Grid* grid){
+  free(grid->islands);
+  free(grid->bridges);
+  grid = NULL;
+
+  h->size--;
+}
+
+void delete_heap(heap h){
+    while(h->size > 0) {
+	    delete_game(h, &(h->tab[h->size-1]));
+    }
+    free(h->tab);
+
+	free(h);
+}
+
+void insert_value(heap h, Grid g, unsigned size_grid, unsigned nb_island){
+	if(h->size >= h->capacity){ 	//réallocation de 2* la capacité du tas
+		unsigned new_size = 2*h->capacity;
+    	h->tab = realloc(h->tab, new_size*sizeof(Grid));
+    	h->capacity = new_size;
+	}
+    initialize(&(h->tab[h->size]), size_grid, nb_island);
+	copy_game (g, &(h->tab[h->size]), size_grid, nb_island);
+	h->size++;
+}

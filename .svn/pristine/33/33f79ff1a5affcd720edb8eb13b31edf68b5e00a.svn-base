@@ -1,0 +1,17 @@
+CPPFLAGS = -I. 
+CFLAGS   = -g -Wall -Wextra -std=c99
+LDFLAGS  = -lm
+
+BIN      = inshiNoHeya
+
+.PHONY: all clean cleanall
+
+all: $(BIN)
+
+inshiNoHeya: composites.o
+
+clean:
+	@(rm -f *.o *~)
+
+cleanall: clean
+	@(rm -f *.grid $(BIN))

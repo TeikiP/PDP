@@ -1,0 +1,701 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "hashiwokakero.h"
+
+int pos = 0;
+
+int distance(int a, int b){
+    if (a<b)
+         return b-a;
+    return a-b;
+}
+
+int is_game_over(Grid* grid){
+  int i = 0;
+  int cpt_bridges = 0;
+  int cpt_values = 0;
+  for (i = 0;i<nbIsland;i++){
+    cpt_values += grid->islands[i].value;
+    cpt_bridges += grid->islands[i].nbBridgeDown + grid->islands[i].nbBridgeUp + grid->islands[i].nbBridgeLeft +grid->islands[i].nbBridgeRight;
+  }
+  if (cpt_values == cpt_bridges)
+    return 1;
+  return 0;
+}
+
+unsigned concatenate(unsigned x, unsigned y) {
+    unsigned pow = 10;
+    while(y >= pow)
+        pow *= 10;
+    return x * pow + y;
+}
+
+ void lock(Island *islands, Island *islandt, int dir, int bridges[]){
+   int xs = islands->x;
+   int ys = islands->y;
+   int xt = islandt->x;
+   int yt = islandt->y;
+  if (dir == 0){
+    for (ys-=1;ys>yt;ys--){
+      bridges[pos]=concatenate(xs,ys);
+      pos++;
+    }
+  }
+  if (dir == 1){
+    for (ys+=1;ys<yt;ys++){
+      bridges[pos]=concatenate(xs,ys);
+      pos++;
+    }
+  }
+  if (dir == 2){
+    for (xs-=1;xs>xt;xs--){
+      bridges[pos]=concatenate(xs,ys);
+      pos++;
+    }
+  }
+  if (dir == 3){
+    for (xs+=1;xs<xt;xs++){
+      bridges[pos]=concatenate(xs,ys);
+      pos++;
+    }
+  }
+}
+
+  int is_locked(Island *islands, Island *islandt, int dir, int bridges[]){
+    int i = 0;
+    int xs = islands->x;
+    int ys = islands->y;
+    int xt = islandt->x;
+    int yt = islandt->y;
+  if (dir == 0){
+    for (ys-=1;ys>yt;ys--){
+      for (i = 0; i<=pos; i++){
+      if (bridges[i]==concatenate(xs,ys)){
+          if (islands->linkedUpIsland!=NULL){
+              break;
+          }
+        islands->upNeighbor=NULL;
+        islandt->downNeighbor=NULL;
+        return 1;
+        }
+      }
+    }
+  }
+  if (dir == 1){
+    for (ys+=1;ys<yt;ys++){
+      for (i = 0; i<=pos; i++){
+      if (bridges[i]==concatenate(xs,ys)){
+        if (islands->linkedDownIsland!=NULL){
+              break;
+            }
+        islands->downNeighbor=NULL;
+        islandt->upNeighbor=NULL;
+        return 1;
+      }
+      }
+          }
+  }
+  if (dir == 2){
+    for (xs-=1;xs>xt;xs--){
+      for (i = 0; i<=pos; i++){
+      if (bridges[i]==concatenate(xs,ys)){
+        if (islands->linkedLeftIsland!=NULL){
+              break;
+            }
+        islands->leftNeighbor=NULL;
+        islandt->rightNeighbor=NULL;
+        return 1;
+      }
+      }
+    }
+  }
+  if (dir == 3){
+    for (xs+=1;xs<xt;xs++){
+      for (i = 0; i<=pos; i++){
+      if (bridges[i]==concatenate(xs,ys)){
+            if (islands->linkedRightIsland!=NULL){
+              break;
+            }
+        islands->rightNeighbor=NULL;
+        islandt->leftNeighbor=NULL;
+        return 1;
+      }
+      }
+  }
+  }
+  return 0;
+}
+
+int getNbIsland(FILE *_file) {
+    int nbIsland = 0;
+    if(_file == NULL) // vérification que le fichier existe.
+        printf("Erreur lecture de fichier\n");
+    else
+    {
+        char charRead;
+        charRead = fgetc(_file);
+        while(charRead != EOF) {
+            if((charRead-intToChar<9)&&(charRead-intToChar>0)) {
+                nbIsland++;
+            }
+            charRead = fgetc(_file);
+        }
+    }
+      return nbIsland;
+}
+
+int get_nb_neighbor(Island island){
+  int cpt = 0;
+  if (island.upNeighbor!=NULL)
+    cpt++;
+  if (island.downNeighbor!=NULL)
+    cpt++;
+  if (island.leftNeighbor!=NULL)
+    cpt++;
+  if (island.rightNeighbor!=NULL)
+    cpt++;
+  return cpt;
+}
+
+int get_nb_neighbor_finished(Island island){
+  int cpt = 0;
+  if ((island.upNeighbor!=NULL)&&(island.upNeighbor->finished==1))
+    cpt++;
+  if ((island.downNeighbor!=NULL)&&(island.downNeighbor->finished==1))
+    cpt++;
+  if ((island.leftNeighbor!=NULL)&&(island.leftNeighbor->finished==1))
+    cpt++;
+  if ((island.rightNeighbor!=NULL)&&(island.rightNeighbor->finished==1))
+    cpt++;
+  return cpt;
+}
+
+int get_nb_bridge(Island island){
+  int cpt = 0;
+  if (island.nbBridgeUp>0)
+    cpt+=island.nbBridgeUp;
+  if (island.nbBridgeDown>0)
+    cpt+=island.nbBridgeDown;
+  if (island.nbBridgeLeft>0)
+    cpt+=island.nbBridgeLeft;
+  if (island.nbBridgeRight>0)
+    cpt+=island.nbBridgeRight;
+  return cpt;
+}
+
+void fillGrid(FILE *_file, Grid *grid) {
+  if(_file == NULL) // vérification que le fichier existe.
+      printf("Erreur lecture de fichier\n");
+  else
+  {
+    char charRead;
+    int i = 0;
+    int j = 0;
+    int a = 0;
+    charRead = fgetc(_file);
+    while(charRead != EOF) {
+        if(charRead == '_') { // si la grille a un '_' on le remplace par un 0 dans le tableau.
+            j++;
+        }
+        else if(charRead == '\n') {
+            i++;
+            j = 0;
+        }
+        else if((charRead-intToChar<9)&&(charRead-intToChar>0)) {
+            grid->islands[a].x=j;
+            grid->islands[a].y=i;
+            grid->islands[a].value=charRead-intToChar;
+            j++;
+            a++;
+        }
+        else
+            j++;
+        charRead = fgetc(_file);
+
+    }
+    }
+}
+
+void fillGridNeighbor(Grid *grid) {
+    int i, j;
+    int positionNeighbor=-1;
+    for(i=0;i<nbIsland;i++) {
+        if((grid->islands[i].x != 0)&&(grid->islands[i].leftNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].y == grid->islands[i].y)&&(grid->islands[j].x<grid->islands[i].x)) {
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].x,grid->islands[i].x))>(distance(grid->islands[j].x,grid->islands[i].x)))
+                            positionNeighbor=j;
+                    }
+                }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].leftNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].rightNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+        if((grid->islands[i].x != sizeGrid)&&(grid->islands[i].rightNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].y == grid->islands[i].y)&&(grid->islands[j].x>grid->islands[i].x)) {
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].x,grid->islands[i].x))>(distance(grid->islands[j].x,grid->islands[i].x)))
+                            positionNeighbor=j;
+                    }
+                }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].rightNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].leftNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+        if((grid->islands[i].y != 0)&&(grid->islands[i].upNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].x == grid->islands[i].x)&&(grid->islands[j].y<grid->islands[i].y)) {
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].y,grid->islands[i].y))>(distance(grid->islands[j].y,grid->islands[i].y)))
+                            positionNeighbor=j;
+                    }
+                }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].upNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].downNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+        if((grid->islands[i].y != sizeGrid)&&(grid->islands[i].downNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].x == grid->islands[i].x)&&(grid->islands[j].y>grid->islands[i].y)) {
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].y,grid->islands[i].y))>(distance(grid->islands[j].y,grid->islands[i].y)))
+                            positionNeighbor=j;
+                    }
+                }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].downNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].upNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+    }
+
+}
+
+void printGrid(int **grid) {
+    int i, j;
+    for(i = 0; i < sizeGrid; i++) {
+            if(i > 0)
+                printf("\n");
+        for(j = 0; j < sizeGrid; j++)
+            printf("%d", grid[i][j]);
+    }
+}
+
+void printGridInFile(int** grid) {
+    FILE *outputFile = NULL;
+
+    outputFile = fopen("../hashiOutput.txt", "w"); // on crée un fichier "hashiOutput.txt pour écrire la grille.
+    int i, j;
+    for(i = 0; i < sizeGrid; i++) {
+            if(i > 0)
+                fputc('\n', outputFile);
+        for(j = 0; j < sizeGrid; j++) {
+            if(grid[i][j] + intToChar == '0')
+                fputc('_', outputFile);
+            else
+                fputc(grid[i][j] + intToChar, outputFile);
+        }
+    }
+    fclose(outputFile);
+}
+
+/* Solving algorithms */
+
+int get_nb_island_finished(Grid *grid) {
+    int cpt=0;
+    int i;
+    for(i=0;i<nbIsland;i++){
+        if(grid->islands[i].finished==1)
+            cpt++;
+    }
+    return cpt;
+}
+
+void validate_island(Island* island) {
+    if(get_nb_bridge(*island)==island->value)
+        island->finished=1;
+}
+
+void heuristic_n1(Island* island, int bridges[]) {
+    if (get_nb_neighbor(*island)==1 && island->finished==0){
+        if (island->upNeighbor!=NULL && is_locked(island, island->upNeighbor, UP, bridges)==0){
+          island->linkedUpIsland=island->upNeighbor;
+          island->nbBridgeUp=island->value;
+          island->linkedUpIsland->linkedDownIsland=island;
+          island->linkedUpIsland->nbBridgeDown=island->value;
+          lock(island, island->upNeighbor, UP, bridges);
+          validate_island(island->linkedUpIsland);
+        }
+        if (island->leftNeighbor!=NULL && is_locked(island, island->leftNeighbor, LEFT, bridges)==0){
+          island->linkedLeftIsland=island->leftNeighbor;
+          island->nbBridgeLeft=island->value;
+          island->linkedLeftIsland->linkedRightIsland=island;
+          island->linkedLeftIsland->nbBridgeRight=island->value;
+          lock(island, island->leftNeighbor, LEFT, bridges);
+          validate_island(island->linkedLeftIsland);
+        }
+        if (island->downNeighbor!=NULL && is_locked(island, island->downNeighbor, DOWN, bridges)==0){
+          island->linkedDownIsland=island->downNeighbor;
+          island->nbBridgeDown=island->value;
+          island->linkedDownIsland->linkedUpIsland=island;
+          island->linkedDownIsland->nbBridgeUp=island->value;
+          lock(island, island->downNeighbor, DOWN, bridges);
+          validate_island(island->linkedDownIsland);
+          }
+        if (island->rightNeighbor!=NULL && is_locked(island, island->rightNeighbor, RIGHT, bridges)==0){
+          island->linkedRightIsland=island->rightNeighbor;
+          island->nbBridgeRight=island->value;
+          island->linkedRightIsland->linkedLeftIsland=island;
+          island->linkedRightIsland->nbBridgeLeft=island->value;
+          lock(island, island->rightNeighbor, RIGHT, bridges);
+          validate_island(island->linkedRightIsland);
+          }
+        island->finished=1;
+  }
+}
+
+void heuristic_n2(Island* island, int bridges[]){
+  if (get_nb_neighbor(*island)==island->value/2 && island->finished==0){
+   if (island->upNeighbor!=NULL && is_locked(island, island->upNeighbor, UP, bridges)==0){
+      island->linkedUpIsland=island->upNeighbor;
+      island->nbBridgeUp=2;
+      island->linkedUpIsland->linkedDownIsland=island;
+      island->linkedUpIsland->nbBridgeDown=2;
+      lock(island, island->upNeighbor, UP, bridges);
+      validate_island(island->linkedUpIsland);
+    }
+    if (island->leftNeighbor!=NULL && is_locked(island, island->leftNeighbor, LEFT, bridges)==0){
+      island->linkedLeftIsland=island->leftNeighbor;
+      island->nbBridgeLeft=2;
+      island->linkedLeftIsland->linkedRightIsland=island;
+      island->linkedLeftIsland->nbBridgeRight=2;
+      lock(island, island->leftNeighbor, LEFT, bridges);
+      validate_island(island->linkedLeftIsland);
+      }
+    if (island->downNeighbor!=NULL && is_locked(island, island->downNeighbor, DOWN, bridges)==0){
+      island->linkedDownIsland=island->downNeighbor;
+      island->nbBridgeDown=2;
+      island->linkedDownIsland->linkedUpIsland=island;
+      island->linkedDownIsland->nbBridgeUp=2;
+      lock(island, island->downNeighbor, DOWN, bridges);
+      validate_island(island->linkedDownIsland);
+      }
+    if (island->rightNeighbor!=NULL && is_locked(island, island->rightNeighbor, RIGHT, bridges)==0){
+      island->linkedRightIsland=island->rightNeighbor;
+      island->nbBridgeRight=2;
+      island->linkedRightIsland->linkedLeftIsland=island;
+      island->linkedRightIsland->nbBridgeLeft=2;
+      lock(island, island->rightNeighbor, RIGHT, bridges);
+      validate_island(island->linkedRightIsland);
+      }
+    island->finished=1;
+  }
+}
+
+void heuristic_n3(Island* island, int bridges[]){
+    if(island->upNeighbor!=NULL)
+        is_locked(island, island->upNeighbor, UP, bridges);
+    if(island->downNeighbor!=NULL)
+        is_locked(island, island->downNeighbor, DOWN, bridges);
+    if(island->leftNeighbor!=NULL)
+        is_locked(island, island->leftNeighbor, LEFT, bridges);
+    if(island->rightNeighbor!=NULL)
+        is_locked(island, island->rightNeighbor, RIGHT, bridges);
+  if (((island->value+1)%2==0)&&(get_nb_neighbor(*island)==(island->value+1)/2) && (island->finished==0)){
+    if ((island->upNeighbor!=NULL)&& (is_locked(island, island->upNeighbor, UP, bridges)==0) &&(island->nbBridgeUp<1)){
+      island->linkedUpIsland=island->upNeighbor;
+      island->nbBridgeUp=1;
+      island->linkedUpIsland->linkedDownIsland=island;
+      island->linkedUpIsland->nbBridgeDown=1;
+      lock(island, island->upNeighbor, UP, bridges);
+      validate_island(island->linkedUpIsland);
+    }
+    if ((island->leftNeighbor!=NULL) && (is_locked(island, island->leftNeighbor, LEFT, bridges)==0)&&(island->nbBridgeLeft<1)){
+      island->linkedLeftIsland=island->leftNeighbor;
+      island->nbBridgeLeft=1;
+      island->linkedLeftIsland->linkedRightIsland=island;
+      island->linkedLeftIsland->nbBridgeRight=1;
+      lock(island, island->leftNeighbor, LEFT, bridges);
+      validate_island(island->linkedLeftIsland);
+    }
+    if ((island->downNeighbor!=NULL)&& (is_locked(island, island->downNeighbor, DOWN, bridges)==0)&&(island->nbBridgeDown<1)){
+      island->linkedDownIsland=island->downNeighbor;
+      island->nbBridgeDown=1;
+      island->linkedDownIsland->linkedUpIsland=island;
+      island->linkedDownIsland->nbBridgeUp=1;
+      lock(island, island->downNeighbor, DOWN, bridges);
+      validate_island(island->linkedDownIsland);
+      }
+    if ((island->rightNeighbor!=NULL) && (is_locked(island, island->rightNeighbor, RIGHT, bridges)==0)&&(island->nbBridgeRight<1)){
+      island->linkedRightIsland=island->rightNeighbor;
+      island->nbBridgeRight=1;
+      island->linkedRightIsland->linkedLeftIsland=island;
+      island->linkedRightIsland->nbBridgeLeft=1;
+      lock(island, island->rightNeighbor, RIGHT, bridges);
+      validate_island(island->linkedRightIsland);
+      }
+    validate_island(island);
+  }
+}
+
+void heuristic_nb6(Island* island, int bridges[]){
+  if ((island->value==6) && (get_nb_neighbor(*island)==3) && (island->finished==0)){
+    if (island->upNeighbor!=NULL && is_locked(island, island->upNeighbor, UP, bridges)==0){
+      island->linkedUpIsland=island->upNeighbor;
+      island->nbBridgeUp=1;
+      island->linkedUpIsland->linkedDownIsland=island;
+      island->linkedUpIsland->nbBridgeDown=1;
+      lock(island, island->upNeighbor, UP, bridges);
+      validate_island(island->linkedUpIsland);
+    }
+    if (island->leftNeighbor!=NULL && is_locked(island, island->leftNeighbor, LEFT, bridges)==0){
+      island->linkedLeftIsland=island->leftNeighbor;
+      island->nbBridgeLeft=1;
+      island->linkedLeftIsland->linkedRightIsland=island;
+      island->linkedLeftIsland->nbBridgeRight=1;
+      lock(island, island->leftNeighbor, LEFT, bridges);
+      validate_island(island->linkedLeftIsland);
+    }
+    if (island->downNeighbor!=NULL && is_locked(island, island->downNeighbor, DOWN, bridges)==0){
+      island->linkedDownIsland=island->downNeighbor;
+      island->nbBridgeDown=1;
+      island->linkedDownIsland->linkedUpIsland=island;
+      island->linkedDownIsland->nbBridgeUp=1;
+      lock(island, island->downNeighbor, DOWN, bridges);
+      validate_island(island->linkedDownIsland);
+      }
+    if (island->rightNeighbor!=NULL && is_locked(island, island->rightNeighbor, RIGHT, bridges)==0){
+      island->linkedRightIsland=island->rightNeighbor;
+      island->nbBridgeRight=1;
+      island->linkedRightIsland->linkedLeftIsland=island;
+      island->linkedRightIsland->nbBridgeLeft=1;
+      lock(island, island->rightNeighbor, RIGHT, bridges);
+      validate_island(island->linkedRightIsland);
+      }
+    validate_island(island);
+  }
+}
+
+void heuristic_neighbor_finished(Island* island, int bridges[]) {
+    if(island->upNeighbor!=NULL)
+        is_locked(island, island->upNeighbor, UP, bridges);
+    if(island->downNeighbor!=NULL)
+        is_locked(island, island->downNeighbor, DOWN, bridges);
+    if(island->leftNeighbor!=NULL)
+        is_locked(island, island->leftNeighbor, LEFT, bridges);
+    if(island->rightNeighbor!=NULL)
+        is_locked(island, island->rightNeighbor, RIGHT, bridges);
+
+    if ((get_nb_neighbor(*island)-get_nb_neighbor_finished(*island))==1 && island->finished==0){
+        if ((island->upNeighbor!=NULL)&&(is_locked(island, island->upNeighbor, UP, bridges)==0)&&(island->upNeighbor->finished==0)){
+          island->linkedUpIsland=island->upNeighbor;
+          island->nbBridgeUp+=island->value-get_nb_bridge(*island);
+          island->linkedUpIsland->linkedDownIsland=island;
+          island->linkedUpIsland->nbBridgeDown=island->nbBridgeUp;
+          lock(island, island->upNeighbor, UP, bridges);
+          validate_island(island->linkedUpIsland);
+        }
+        if ((island->leftNeighbor!=NULL) && (is_locked(island, island->leftNeighbor, LEFT, bridges)==0)&&(island->leftNeighbor->finished==0)){
+          island->linkedLeftIsland=island->leftNeighbor;
+          island->nbBridgeLeft+=island->value-get_nb_bridge(*island);
+          island->linkedLeftIsland->linkedRightIsland=island;
+          island->linkedLeftIsland->nbBridgeRight=island->nbBridgeLeft;
+          lock(island, island->leftNeighbor, LEFT, bridges);
+          validate_island(island->linkedLeftIsland);
+        }
+        if ((island->downNeighbor!=NULL)&& (is_locked(island, island->downNeighbor, DOWN, bridges)==0)&&(island->downNeighbor->finished==0)){
+          island->linkedDownIsland=island->downNeighbor;
+          island->nbBridgeDown+=island->value-get_nb_bridge(*island);
+          island->linkedDownIsland->linkedUpIsland=island;
+          island->linkedDownIsland->nbBridgeUp=island->nbBridgeDown;
+          lock(island, island->downNeighbor, DOWN, bridges);
+          validate_island(island->linkedDownIsland);
+          }
+        if ((island->rightNeighbor!=NULL) && (is_locked(island, island->rightNeighbor, RIGHT, bridges)==0)&&(island->rightNeighbor->finished==0)){
+          island->linkedRightIsland=island->rightNeighbor;
+          island->nbBridgeRight+=island->value-get_nb_bridge(*island);
+          island->linkedRightIsland->linkedLeftIsland=island;
+          island->linkedRightIsland->nbBridgeLeft=island->nbBridgeRight;
+          lock(island, island->rightNeighbor, RIGHT, bridges);
+          validate_island(island->linkedRightIsland);
+          }
+        island->finished=1;
+  }
+}
+
+void heuristic_k(Island* island){
+    int tmp_max;
+    int max_Bridge=0;
+    int max_Bridge_Up=0;
+    int max_Bridge_Left=0;
+    int max_Bridge_Down=0;
+    int max_Bridge_Right=0;
+
+    if(island->finished==0) {
+        if(island->upNeighbor!=NULL && island->upNeighbor->finished==0) {
+            tmp_max=island->upNeighbor->value-get_nb_bridge(*(island->upNeighbor));
+            if(tmp_max>1)
+                max_Bridge_Up=2;
+            else if(tmp_max>0)
+                max_Bridge_Up=1;
+            max_Bridge+=max_Bridge_Up;
+        }
+        if(island->leftNeighbor!=NULL && island->leftNeighbor->finished==0) {
+            tmp_max=island->leftNeighbor->value-get_nb_bridge(*(island->leftNeighbor));
+            if(tmp_max>1)
+                max_Bridge_Left=2;
+            else if(tmp_max>0)
+                max_Bridge_Left=1;
+            max_Bridge+=max_Bridge_Left;
+        }
+        if(island->downNeighbor!=NULL && island->downNeighbor->finished==0) {
+            tmp_max=island->downNeighbor->value-get_nb_bridge(*(island->downNeighbor));
+            if(tmp_max>1)
+                max_Bridge_Down=2;
+            else if(tmp_max>0)
+                max_Bridge_Down=1;
+            max_Bridge+=max_Bridge_Down;
+        }
+        if(island->rightNeighbor!=NULL && island->rightNeighbor->finished==0) {
+            tmp_max=island->rightNeighbor->value-get_nb_bridge(*(island->rightNeighbor));
+            if(tmp_max>1)
+                max_Bridge_Right=2;
+            else if(tmp_max>0)
+                max_Bridge_Right=1;
+            max_Bridge+=max_Bridge_Right;
+        }
+        printf("max bridge %d\n",max_Bridge);
+        if(island->value==max_Bridge) {
+            if(max_Bridge_Up>0) {
+              island->linkedUpIsland=island->upNeighbor;
+              island->nbBridgeUp=max_Bridge_Up;
+              island->linkedUpIsland->linkedDownIsland=island;
+              island->linkedUpIsland->nbBridgeDown=max_Bridge_Up;
+              validate_island(island->linkedUpIsland);
+            }
+            if(max_Bridge_Left>0) {
+              island->linkedLeftIsland=island->leftNeighbor;
+              island->nbBridgeLeft=max_Bridge_Left;
+              island->linkedLeftIsland->linkedRightIsland=island;
+              island->linkedLeftIsland->nbBridgeRight=max_Bridge_Left;
+              validate_island(island->linkedLeftIsland);
+            }
+            if(max_Bridge_Down>0) {
+              island->linkedDownIsland=island->downNeighbor;
+              island->nbBridgeDown=max_Bridge_Down;
+              island->linkedDownIsland->linkedUpIsland=island;
+              island->linkedDownIsland->nbBridgeUp=max_Bridge_Down;
+              validate_island(island->linkedDownIsland);
+            }
+            if(max_Bridge_Right>0) {
+              island->linkedRightIsland=island->rightNeighbor;
+              island->nbBridgeRight=max_Bridge_Right;
+              island->linkedRightIsland->linkedLeftIsland=island;
+              island->linkedRightIsland->nbBridgeLeft=max_Bridge_Right;
+              validate_island(island->linkedRightIsland);
+            }
+            island->finished=1;
+        }
+    }
+}
+
+void simpleSolver(Grid *grid, int bridges[]) {
+    int i,j;
+    //while (is_game_over(grid)!=1){
+      for(i=0;i<nbIsland;i++) {
+          heuristic_n1(&(grid->islands[i]), bridges);
+          heuristic_n2(&(grid->islands[i]), bridges);
+          heuristic_nb6(&(grid->islands[i]), bridges);
+          heuristic_n3(&(grid->islands[i]), bridges);
+      }
+      for(j=0;j<10;j++) {
+           for(i=0;i<nbIsland;i++) {
+              heuristic_neighbor_finished(&(grid->islands[i]), bridges);
+           }
+      }
+
+  //}
+}
+
+/* Main */
+
+int main(int argc, char **argv)
+{
+    int i;
+    int bridges[1024];
+
+
+    // ouverture du fichier
+    FILE *inputFile;
+    inputFile = fopen(argv[1], "r");
+    nbIsland = getNbIsland(inputFile);
+    //printf("%d",nbIsland);
+    rewind(inputFile);
+
+    // allocation grille
+    Grid *grid = malloc(sizeof(Grid));
+    grid->islands = malloc(sizeof(Island*) * sizeof(Island) * nbIsland);
+    for(i=0;i<nbIsland;i++) {
+        grid->islands[i].upNeighbor=NULL;
+        grid->islands[i].downNeighbor=NULL;
+        grid->islands[i].leftNeighbor=NULL;
+        grid->islands[i].rightNeighbor=NULL;
+
+        grid->islands[i].linkedUpIsland=NULL;
+        grid->islands[i].linkedDownIsland=NULL;
+        grid->islands[i].linkedLeftIsland=NULL;
+        grid->islands[i].linkedRightIsland=NULL;
+
+        grid->islands[i].nbBridgeUp=0;
+        grid->islands[i].nbBridgeDown=0;
+        grid->islands[i].nbBridgeLeft=0;
+        grid->islands[i].nbBridgeRight=0;
+
+        grid->islands[i].finished=0;
+}
+
+    fillGrid(inputFile, grid);
+    fillGridNeighbor(grid);
+
+    simpleSolver(grid, bridges);
+
+
+    for(i=0;i<nbIsland;i++) {
+      printf("nombre de bridges de island[%d] : %d\n", i, get_nb_bridge(grid->islands[i]));
+      printf("position : %d %d valeur %d finis : %d\n",grid->islands[i].x,grid->islands[i].y,grid->islands[i].value,
+             grid->islands[i].finished);
+      printf("nombre de bridge a gauche %d, a droite %d, en haut %d, en bas %d\n\n",grid->islands[i].nbBridgeLeft,
+             grid->islands[i].nbBridgeRight, grid->islands[i].nbBridgeUp, grid->islands[i].nbBridgeDown);
+    }
+
+    printf("nombre d'iles finies : %d\n",get_nb_island_finished(grid));
+
+    fclose(inputFile);
+    free(grid);
+    free(grid->islands);
+    printf("Solved.\n");
+
+    return(0);
+}

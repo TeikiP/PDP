@@ -1,0 +1,1387 @@
+#include "island.h"
+
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+#define INT_TO_CHAR 48 /* constant to translate an unsigned into a char*/
+#define MAX_SIZE_GRID 255 /* constant for the max of the size of the grid we want */
+
+/* Checks the absolute distance between two integers. */
+unsigned distance(unsigned a, unsigned b) {
+  if (a < b)
+    return b - a;
+  return a - b;
+}
+
+/* Checks the island and returns the number of neighbors */
+unsigned get_nb_neighbor(Island island) {
+  unsigned cpt = 0;
+  if (island.up_neighbor != NULL)
+    cpt++;
+  if (island.down_neighbor != NULL)
+    cpt++;
+  if (island.left_neighbor != NULL)
+    cpt++;
+  if (island.right_neighbor != NULL)
+    cpt++;
+  return cpt;
+}
+
+/* Checks the island and returns the number of neighbors finished */
+unsigned get_nb_neighbor_finished(Island island) {
+  unsigned cpt = 0;
+  if ((island.up_neighbor != NULL) &&
+      (get_finished(island.up_neighbor->information_island) == 1))
+    cpt++;
+  if ((island.down_neighbor != NULL) &&
+      (get_finished(island.down_neighbor->information_island) == 1))
+    cpt++;
+  if ((island.left_neighbor != NULL) &&
+      (get_finished(island.left_neighbor->information_island) == 1))
+    cpt++;
+  if ((island.right_neighbor != NULL) &&
+      (get_finished(island.right_neighbor->information_island) == 1))
+    cpt++;
+  return cpt;
+}
+
+/* Checks the island and returns the number of bridges */
+unsigned get_nb_bridge(Island island) {
+  return get_nb_bridge_up(island.information_island) +
+         get_nb_bridge_down(island.information_island) +
+         get_nb_bridge_left(island.information_island) +
+         get_nb_bridge_right(island.information_island);
+}
+
+unsigned get_nb_bridge_possible_to_draw(Island island) {
+    unsigned cpt_bridge = 0;
+    if((island.up_neighbor != NULL) && (get_finished(island.up_neighbor->information_island) != 1)
+    && (get_nb_bridge_up(island.information_island) < 2)) {
+        if(get_value(island.up_neighbor->information_island) -
+           get_nb_bridge(*(island.up_neighbor)) == 1)
+            cpt_bridge++;
+        else
+            cpt_bridge += (2 - get_nb_bridge_up(island.information_island));
+    }
+    if((island.down_neighbor != NULL) && (get_finished(island.down_neighbor->information_island) != 1)
+    && (get_nb_bridge_down(island.information_island) < 2)) {
+        if(get_value(island.down_neighbor->information_island) -
+           get_nb_bridge(*(island.down_neighbor)) == 1)
+            cpt_bridge++;
+        else
+            cpt_bridge += (2 - get_nb_bridge_down(island.information_island));
+    }
+    if((island.left_neighbor != NULL) && (get_finished(island.left_neighbor->information_island) != 1)
+    && (get_nb_bridge_left(island.information_island) < 2)) {
+        if(get_value(island.left_neighbor->information_island) -
+           get_nb_bridge(*(island.left_neighbor)) == 1)
+            cpt_bridge++;
+        else
+            cpt_bridge += (2 - get_nb_bridge_left(island.information_island));
+    }
+    if((island.right_neighbor != NULL) && (get_finished(island.right_neighbor->information_island) != 1)
+    && (get_nb_bridge_right(island.information_island) < 2)) {
+        if(get_value(island.right_neighbor->information_island) -
+           get_nb_bridge(*(island.right_neighbor)) == 1)
+            cpt_bridge++;
+        else
+            cpt_bridge += (2 - get_nb_bridge_right(island.information_island));
+    }
+    return cpt_bridge;
+}
+
+/* CHecks if the rules of the game are respected, i.e. checks if there isn't
+ * more than 2 bridges by side and if the number of bridges isn't higher than
+ * the island value */
+unsigned is_correct(Grid* grid, unsigned nb_island) {
+  for (unsigned i = 0; i < nb_island; i++) {
+    if ((get_nb_bridge_up(grid->islands[i].information_island) +
+         get_nb_bridge_left(grid->islands[i].information_island) +
+         get_nb_bridge_down(grid->islands[i].information_island) +
+         get_nb_bridge_right(grid->islands[i].information_island) >
+            get_value(grid->islands[i].information_island)) ||
+        get_nb_bridge_up(grid->islands[i].information_island) > 2 ||
+        get_nb_bridge_down(grid->islands[i].information_island) > 2 ||
+        get_nb_bridge_left(grid->islands[i].information_island) > 2 ||
+        get_nb_bridge_down(grid->islands[i].information_island) > 2 ||
+        get_nb_bridge_right(grid->islands[i].information_island) > 2) {
+      return 0;
+    }
+    if((get_finished(grid->islands[i].information_island) != 1) &&
+       (get_value(grid->islands[i].information_island) - get_nb_bridge(grid->islands[i]) >
+       (get_nb_bridge_possible_to_draw(grid->islands[i])))) {
+    /*if((get_finished(grid->islands[i].information_island) != 1) &&
+       (get_value(grid->islands[i].information_island) - get_nb_bridge(grid->islands[i]) >
+       (get_nb_neighbor(grid->islands[i]) - get_nb_neighbor_finished(grid->islands[i])) * 2)) {*/
+        /*printf("impossible ile %d\n", i);
+        printf("bridges to do %d\n", get_value(grid->islands[i].information_island) - get_nb_bridge(grid->islands[i]));
+        printf("nb_neighbor %d\n", get_nb_neighbor(grid->islands[i]));
+        printf("nb_neighbor_finished %d\n", get_nb_neighbor_finished(grid->islands[i]));*/
+        return 0;
+    }
+  }
+  return 1;
+}
+
+
+/* Checks if the game is solved. Returns 1 if it's the case, 0 if not. */
+unsigned is_game_over(Grid* grid, unsigned nb_island) {
+  unsigned cpt_bridges = 0;
+  unsigned cpt_values = 0;
+  unsigned cpt_finished = 0;
+  for (unsigned i = 0; i < nb_island; i++) {
+    cpt_values += get_value(grid->islands[i].information_island);
+    cpt_bridges += get_nb_bridge_down(grid->islands[i].information_island) +
+                   get_nb_bridge_up(grid->islands[i].information_island) +
+                   get_nb_bridge_left(grid->islands[i].information_island) +
+                   get_nb_bridge_right(grid->islands[i].information_island);
+    cpt_finished += get_finished(grid->islands[i].information_island);
+  }
+
+  if (cpt_values == cpt_bridges && cpt_finished == nb_island && is_correct(grid, nb_island) == 1)
+    return 1;
+  return 0;
+}
+
+/* Checks the Grid and returns the number of islands finished */
+unsigned get_nb_island_finished(Grid* grid, unsigned nb_island) {
+  unsigned cpt = 0;
+  for (unsigned i = 0; i < nb_island; i++) {
+    if (get_finished(grid->islands[i].information_island) == 1)
+      cpt++;
+  }
+  return cpt;
+}
+
+/* Print the instructions to solve the game. */
+void print_Grid(Grid* grid, unsigned nb_island) {
+  for (unsigned i = 0; i < nb_island; i++) {
+    printf("Island[%d], position %d %d: ", i, get_x(grid->islands[i].position),
+           get_y(grid->islands[i].position));
+    if(get_nb_bridge_left(grid->islands[i].information_island) > 0) {
+        printf("left bridges: %d, ",
+               get_nb_bridge_left(grid->islands[i].information_island));
+    }
+    if(get_nb_bridge_right(grid->islands[i].information_island) > 0) {
+        printf("right bridges: %d, ",
+               get_nb_bridge_right(grid->islands[i].information_island));
+    }
+    if(get_nb_bridge_up(grid->islands[i].information_island) > 0) {
+        printf("up bridges: %d, ",
+               get_nb_bridge_up(grid->islands[i].information_island));
+    }
+    if(get_nb_bridge_down(grid->islands[i].information_island) > 0) {
+        printf("down bridges: %d, ",
+               get_nb_bridge_down(grid->islands[i].information_island));
+    }
+    printf("\n");
+  }
+
+  printf("Total number of islands : %d\nNumber of finished islands : %d\n",
+         nb_island, get_nb_island_finished(grid, nb_island));
+  if (is_game_over(grid, nb_island) == 1) {
+    printf("Solved.\n");
+  } else {
+    printf("Unsolved.\n");
+  }
+  printf("Is the grid correct : %d\n", is_correct(grid, nb_island));
+}
+
+/* Concatenate two integers. Used to encode 2 pairs of coordonates inside the
+ * bridges array. */
+/* unsigned concatenate(unsigned x, unsigned y) {
+  x = x * 10;
+  unsigned pow = 10;
+  while (y >= pow)
+    pow *= 10;
+  return x * pow + y;
+} */
+
+/* Concatenate two integers. Used to encode 2 pairs of coordonates inside the
+ * bridges array. */
+/* unsigned unconcatenate(unsigned bridge_pos, unsigned* x, unsigned* y) {
+  x = x * 10;
+  unsigned pow = 10;
+  while (y >= pow)
+    pow *= 10;
+  return x * pow + y;
+}
+ */
+/* Locks the way where a bridge is drawn. It simply copies the concatenation of
+ * the coordonates inside the array bridge. */
+void lock(Island* islands, Island* islandt, unsigned dir, Grid* grid) {
+  unsigned xs = get_x(islands->position);
+  unsigned ys = get_y(islands->position);
+  unsigned xt = get_x(islandt->position);
+  unsigned yt = get_y(islandt->position);
+  if (dir == 0) {
+    for (ys -= 1; ys > yt; ys--) {
+        grid->bridges_x[grid->pos] = xs;
+        grid->bridges_y[grid->pos] = ys;
+        grid->pos++;
+      }
+    }
+  if (dir == 1) {
+    for (ys += 1; ys < yt; ys++) {
+        grid->bridges_x[grid->pos] = xs;
+        grid->bridges_y[grid->pos] = ys;
+        grid->pos++;
+      }
+    }
+  if (dir == 2) {
+    for (xs -= 1; xs > xt; xs--) {
+        grid->bridges_x[grid->pos] = xs;
+        grid->bridges_y[grid->pos] = ys;
+        grid->pos++;
+      }
+  }
+  if (dir == 3) {
+    for (xs += 1; xs < xt; xs++) {
+        grid->bridges_x[grid->pos] = xs;
+        grid->bridges_y[grid->pos] = ys;
+        grid->pos++;
+    }
+  }
+}
+
+void bridge_doubler(Grid* grid, unsigned nb_island){
+  for(unsigned i = 0; i < nb_island; ++i){
+    if(get_nb_bridge_up(grid->islands[i].information_island)==2){
+      unsigned xs = get_x(grid->islands[i].position);
+      unsigned ys = get_y(grid->islands[i].position);
+      unsigned yt = get_y(grid->islands[i].linked_up_island->position);
+              for (ys -= 1; ys > yt; ys--) {
+      for(unsigned j = 0; j < grid->pos; ++j){
+          if(grid->bridges_x[j] == xs && grid->bridges_y[j] == ys)
+            grid->bridges_d[j]=1;
+          }
+        }
+      }
+      if(get_nb_bridge_down(grid->islands[i].information_island)==2){
+      unsigned xs = get_x(grid->islands[i].position);
+      unsigned ys = get_y(grid->islands[i].position);
+      unsigned yt = get_y(grid->islands[i].linked_down_island->position);
+              for (ys += 1; ys < yt; ys++) {
+      for(unsigned j = 0; j < grid->pos; ++j){
+          if(grid->bridges_x[j] == xs && grid->bridges_y[j] == ys)
+            grid->bridges_d[j]=1;
+          }
+        }
+      }
+      if(get_nb_bridge_left(grid->islands[i].information_island)==2){
+      unsigned xs = get_x(grid->islands[i].position);
+      unsigned ys = get_y(grid->islands[i].position);
+      unsigned xt = get_x(grid->islands[i].linked_left_island->position);
+              for (xs -= 1; xs > xt; xs--) {
+      for(unsigned j = 0; j < grid->pos; ++j){
+          if(grid->bridges_x[j] == xs && grid->bridges_y[j] == ys)
+            grid->bridges_d[j]=1;
+          }
+        }
+      }
+      if(get_nb_bridge_right(grid->islands[i].information_island)==2){
+      unsigned xs = get_x(grid->islands[i].position);
+      unsigned ys = get_y(grid->islands[i].position);
+      unsigned xt = get_x(grid->islands[i].linked_right_island->position);
+              for (xs += 1; xs < xt; xs++) {
+      for(unsigned j = 0; j < grid->pos; ++j){
+          if(grid->bridges_x[j] == xs && grid->bridges_y[j] == ys)
+            grid->bridges_d[j]=1;
+          }
+        }
+      }
+    }
+  }
+
+/* Checks if a way is locked, and delete the neighbor if it's the case. */
+unsigned is_locked(Island* islands, Island* islandt, unsigned dir, Grid* grid) {
+  unsigned xs = get_x(islands->position);
+  unsigned ys = get_y(islands->position);
+  unsigned xt = get_x(islandt->position);
+  unsigned yt = get_y(islandt->position);
+  if (dir == 0) {
+    for (ys -= 1; ys > yt; ys--) {
+      for (unsigned i = 0; i <= grid->pos; i++) {
+        if (grid->bridges_x[i] == xs && grid->bridges_y[i] == ys) {
+          if (islands->linked_up_island != NULL && get_nb_bridge_up(islands->information_island) < 2) {
+            break;
+          }
+          islands->up_neighbor = NULL;
+          islandt->down_neighbor = NULL;
+          return 1;
+        }
+      }
+    }
+  }
+  if (dir == 1) {
+    for (ys += 1; ys < yt; ys++) {
+      for (unsigned i = 0; i <= grid->pos; i++) {
+        if (grid->bridges_x[i] == xs && grid->bridges_y[i] == ys) {
+          if (islands->linked_down_island != NULL && get_nb_bridge_down(islands->information_island) < 2) {
+            break;
+          }
+          islands->down_neighbor = NULL;
+          islandt->up_neighbor = NULL;
+          return 1;
+        }
+      }
+    }
+  }
+  if (dir == 2) {
+    for (xs -= 1; xs > xt; xs--) {
+      for (unsigned i = 0; i <= grid->pos; i++) {
+        if (grid->bridges_x[i] == xs && grid->bridges_y[i] == ys) {
+          if (islands->linked_left_island != NULL && get_nb_bridge_left(islands->information_island) < 2) {
+            break;
+          }
+          islands->left_neighbor = NULL;
+          islandt->right_neighbor = NULL;
+          return 1;
+        }
+      }
+    }
+  }
+  if (dir == 3) {
+    for (xs += 1; xs < xt; xs++) {
+      for (unsigned i = 0; i <= grid->pos; i++) {
+        if (grid->bridges_x[i] == xs && grid->bridges_y[i] == ys) {
+          if (islands->linked_right_island != NULL && get_nb_bridge_right(islands->information_island) < 2) {
+            break;
+          }
+          islands->right_neighbor = NULL;
+          islandt->left_neighbor = NULL;
+          return 1;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+/* Checks the file and returns the number of islands */
+unsigned get_nb_island(FILE* _file) {
+  unsigned nb_island = 0;
+  if (_file == NULL) /* Check if the file exists. */
+    printf("Error reading file.\n");
+  else {
+    char char_read;
+    char_read = fgetc(_file);
+    while (char_read != EOF) {
+      if ((char_read - INT_TO_CHAR < 9) && (char_read - INT_TO_CHAR > 0)) {
+        nb_island++;
+      }
+      char_read = fgetc(_file);
+    }
+  }
+  return nb_island;
+}
+
+/* Checks the file and returns the number of islands */
+unsigned get_size_grid(FILE* _file) {
+  unsigned size_grid = 0;
+  if (_file == NULL) /* Check if the file exists. */
+    printf("Error reading file.\n");
+  else {
+    char char_read;
+    char_read = fgetc(_file);
+    while (char_read != '\n') {
+      size_grid++;
+      char_read = fgetc(_file);
+    }
+  }
+  return size_grid;
+}
+
+/* Checks the file and fills the Grid with the different islands
+ *    and their informations */
+void fill_grid(FILE* _file, Grid* grid, unsigned size_grid) {
+  char char_read;
+  unsigned i = 0;
+  unsigned j = 0;
+  unsigned a = 0;
+  unsigned cpt_to_validate = 0;
+  char_read = fgetc(_file);
+  while (char_read != EOF) {
+    if (char_read == '_') { /* Replaces _ by 0 in Grid. */
+      j++;
+      cpt_to_validate++;
+    } else if (char_read == '\n') {
+      if (j != size_grid) {
+        fprintf(stderr, "Invalid size of the grid.\n");
+        free(grid->bridges_x);
+        free(grid->bridges_y);
+        free(grid->islands);
+        free(grid);
+        fclose(_file);
+        exit(EXIT_FAILURE);
+      }
+      i++;
+      j = 0;
+    } else if ((char_read - INT_TO_CHAR < 9) && (char_read - INT_TO_CHAR > 0)) {
+      set_x(&(grid->islands[a].position), j);
+      set_y(&(grid->islands[a].position), i);
+      grid->islands[a].information_island = char_read - INT_TO_CHAR;
+      j++;
+      a++;
+      cpt_to_validate++;
+    } else {
+      fprintf(stderr, "Invalid character : %c\n", char_read);
+      free(grid->bridges_x);
+      free(grid->bridges_y);
+      free(grid->islands);
+      free(grid);
+      fclose(_file);
+      exit(EXIT_FAILURE);
+    }
+    char_read = fgetc(_file);
+  }
+  if (cpt_to_validate != size_grid * size_grid) {
+    free(grid->bridges_x);
+    free(grid->bridges_y);
+    free(grid->islands);
+    free(grid);
+    fclose(_file);
+    fprintf(stderr, "Invalid size of the grid.\n");
+    exit(EXIT_FAILURE);
+  }
+}
+
+/* Checks the Grid and find the neighbors of each island
+ * and store the information in the islands */
+void fill_grid_neighbor(Grid* grid, unsigned size_grid, unsigned nb_island) {
+  unsigned position_neighbor = nb_island +1;
+  for (unsigned i = 0; i < nb_island; i++) {
+    if ((get_x(grid->islands[i].position) != 0) &&
+        (grid->islands[i].left_neighbor == NULL)) {
+      for (unsigned j = 0; j < nb_island && j != i; j++) {
+        if ((get_y(grid->islands[j].position) ==
+             get_y(grid->islands[i].position)) &&
+            (get_x(grid->islands[j].position) <
+             get_x(grid->islands[i].position))) {
+          if (position_neighbor == nb_island +1)
+            position_neighbor = j;
+          else {
+            if ((distance(get_x(grid->islands[position_neighbor].position),
+                          get_x(grid->islands[i].position))) >
+                (distance(get_x(grid->islands[j].position), get_x(grid->islands[i].position))))
+              position_neighbor = j;
+          }
+        }
+      }
+      if (position_neighbor < nb_island +1) {
+        if((get_value(grid->islands[i].information_island) != 1) || (get_value(grid->islands[position_neighbor].information_island) != 1)) {
+            grid->islands[i].left_neighbor = &(grid->islands[position_neighbor]);
+            grid->islands[position_neighbor].right_neighbor = &(grid->islands[i]);
+        }
+      }
+      position_neighbor = nb_island +1;
+    }
+    if ((get_x(grid->islands[i].position) != size_grid) &&
+        (grid->islands[i].right_neighbor == NULL)) {
+      for (unsigned j = 0; j < nb_island && j != i; j++) {
+        if ((get_y(grid->islands[j].position) ==
+             get_y(grid->islands[i].position)) &&
+            (get_x(grid->islands[j].position) > get_x(grid->islands[i].position))) {
+          if (position_neighbor == nb_island +1)
+            position_neighbor = j;
+          else {
+            if ((distance(get_x(grid->islands[position_neighbor].position),
+                          get_x(grid->islands[i].position))) >
+                (distance(get_x(grid->islands[j].position), get_x(grid->islands[i].position))))
+              position_neighbor = j;
+          }
+        }
+      }
+      if (position_neighbor < nb_island +1) {
+        if((get_value(grid->islands[i].information_island) != 1) || (get_value(grid->islands[position_neighbor].information_island) != 1)) {
+            grid->islands[i].right_neighbor = &(grid->islands[position_neighbor]);
+            grid->islands[position_neighbor].left_neighbor = &(grid->islands[i]);
+        }
+      }
+      position_neighbor = nb_island +1;
+    }
+    if ((get_y(grid->islands[i].position) != 0) &&
+        (grid->islands[i].up_neighbor == NULL)) {
+      for (unsigned j = 0; j < nb_island && j != i; j++) {
+        if ((get_x(grid->islands[j].position) ==
+             get_x(grid->islands[i].position)) &&
+            (get_y(grid->islands[j].position) <
+             get_y(grid->islands[i].position))) {
+          if (position_neighbor == nb_island +1)
+            position_neighbor = j;
+          else {
+            if ((distance(get_y(grid->islands[position_neighbor].position),
+                          get_y(grid->islands[i].position))) >
+                (distance(get_y(grid->islands[j].position), get_y(grid->islands[i].position))))
+              position_neighbor = j;
+          }
+        }
+      }
+      if (position_neighbor < nb_island +1) {
+        if((get_value(grid->islands[i].information_island) != 1) || (get_value(grid->islands[position_neighbor].information_island) != 1)) {
+            grid->islands[i].up_neighbor = &(grid->islands[position_neighbor]);
+            grid->islands[position_neighbor].down_neighbor = &(grid->islands[i]);
+        }
+      }
+      position_neighbor = nb_island +1;
+    }
+    if ((get_y(grid->islands[i].position) != size_grid) &&
+        (grid->islands[i].down_neighbor == NULL)) {
+      for (unsigned j = 0; j < nb_island && j != i; j++) {
+        if ((get_x(grid->islands[j].position) ==
+             get_x(grid->islands[i].position)) &&
+            (get_y(grid->islands[j].position) > get_y(grid->islands[i].position))) {
+          if (position_neighbor == nb_island +1)
+            position_neighbor = j;
+          else {
+            if ((distance(get_y(grid->islands[position_neighbor].position),
+                          get_y(grid->islands[i].position))) >
+                (distance(get_y(grid->islands[j].position), get_y(grid->islands[i].position))))
+              position_neighbor = j;
+          }
+        }
+      }
+      if (position_neighbor < nb_island +1) {
+        if((get_value(grid->islands[i].information_island) != 1) || (get_value(grid->islands[position_neighbor].information_island) != 1)) {
+            grid->islands[i].down_neighbor = &(grid->islands[position_neighbor]);
+            grid->islands[position_neighbor].up_neighbor = &(grid->islands[i]);
+        }
+      }
+      position_neighbor = nb_island +1;
+    }
+  }
+}
+
+/* Solving algorithms */
+
+/* Checks the island and put it to the finished state if the island has
+ * the right amount of bridges. */
+void validate_island(Island* island) {
+  if (get_nb_bridge(*island) == get_value(island->information_island))
+    set_finished(&(island->information_island), 1);
+}
+
+/* Checks the island and if it only has one neighbor then it puts one or two
+ * bridges (according to the value of the island) between the island
+ and the neighbor. */
+void heuristic_n1(Island* island, Grid* grid) {
+  if (get_nb_neighbor(*island) == 1 &&
+      get_finished(island->information_island) == 0) {
+    if (island->up_neighbor != NULL &&
+        is_locked(island, island->up_neighbor, UP, grid) == 0) {
+      island->linked_up_island = island->up_neighbor;
+      set_nb_bridge_up(&(island->information_island),
+                       get_value(island->information_island));
+      island->linked_up_island->linked_down_island = island;
+      set_nb_bridge_down(&(island->linked_up_island->information_island),
+                         get_value(island->information_island));
+      lock(island, island->up_neighbor, UP, grid);
+      validate_island(island->linked_up_island);
+    }
+    if (island->left_neighbor != NULL &&
+        is_locked(island, island->left_neighbor, LEFT, grid) == 0) {
+      island->linked_left_island = island->left_neighbor;
+      set_nb_bridge_left(&(island->information_island),
+                         get_value(island->information_island));
+      island->linked_left_island->linked_right_island = island;
+      set_nb_bridge_right(&(island->linked_left_island->information_island),
+                          get_value(island->information_island));
+      lock(island, island->left_neighbor, LEFT, grid);
+      validate_island(island->linked_left_island);
+    }
+    if (island->down_neighbor != NULL &&
+        is_locked(island, island->down_neighbor, DOWN, grid) == 0) {
+      island->linked_down_island = island->down_neighbor;
+      set_nb_bridge_down(&(island->information_island),
+                         get_value(island->information_island));
+      island->linked_down_island->linked_up_island = island;
+      set_nb_bridge_up(&(island->linked_down_island->information_island),
+                       get_value(island->information_island));
+      lock(island, island->down_neighbor, DOWN, grid);
+      validate_island(island->linked_down_island);
+    }
+    if (island->right_neighbor != NULL &&
+        is_locked(island, island->right_neighbor, RIGHT, grid) == 0) {
+      island->linked_right_island = island->right_neighbor;
+      set_nb_bridge_right(&(island->information_island),
+                          get_value(island->information_island));
+      island->linked_right_island->linked_left_island = island;
+      set_nb_bridge_left(&(island->linked_right_island->information_island),
+                         get_value(island->information_island));
+      lock(island, island->right_neighbor, RIGHT, grid);
+      validate_island(island->linked_right_island);
+    }
+    set_finished(&(island->information_island), 1);
+  }
+}
+
+/* Checks the island and if it is even and has the value divided by 2 number
+ of neighbor then we put two bridges between the island and each of
+ its neighbor */
+void heuristic_n2(Island* island, Grid* grid) {
+  if (get_nb_neighbor(*island) == get_value(island->information_island) / 2 &&
+      get_finished(island->information_island) == 0) {
+    if (island->up_neighbor != NULL &&
+        is_locked(island, island->up_neighbor, UP, grid) == 0) {
+      island->linked_up_island = island->up_neighbor;
+      set_nb_bridge_up(&(island->information_island), 2);
+      island->linked_up_island->linked_down_island = island;
+      set_nb_bridge_down(&(island->linked_up_island->information_island), 2);
+      lock(island, island->up_neighbor, UP, grid);
+      validate_island(island->linked_up_island);
+    }
+    if (island->left_neighbor != NULL &&
+        is_locked(island, island->left_neighbor, LEFT, grid) == 0) {
+      island->linked_left_island = island->left_neighbor;
+      set_nb_bridge_left(&(island->information_island), 2);
+      island->linked_left_island->linked_right_island = island;
+      set_nb_bridge_right(&(island->linked_left_island->information_island), 2);
+      lock(island, island->left_neighbor, LEFT, grid);
+      validate_island(island->linked_left_island);
+    }
+    if (island->down_neighbor != NULL &&
+        is_locked(island, island->down_neighbor, DOWN, grid) == 0) {
+      island->linked_down_island = island->down_neighbor;
+      set_nb_bridge_down(&(island->information_island), 2);
+      island->linked_down_island->linked_up_island = island;
+      set_nb_bridge_up(&(island->linked_down_island->information_island), 2);
+      lock(island, island->down_neighbor, DOWN, grid);
+      validate_island(island->linked_down_island);
+    }
+    if (island->right_neighbor != NULL &&
+        is_locked(island, island->right_neighbor, RIGHT, grid) == 0) {
+      island->linked_right_island = island->right_neighbor;
+      set_nb_bridge_right(&(island->information_island), 2);
+      island->linked_right_island->linked_left_island = island;
+      set_nb_bridge_left(&(island->linked_right_island->information_island), 2);
+      lock(island, island->right_neighbor, RIGHT, grid);
+      validate_island(island->linked_right_island);
+    }
+    set_finished(&(island->information_island), 1);
+  }
+}
+
+/* Checks the island and if it is odd and has the value + 1 divided by 2 number
+ of neighbor then we put one bridge between the island and each of
+ its neighbor */
+void heuristic_n3(Island* island, Grid* grid) {
+  if (((get_value(island->information_island) + 1) % 2 == 0) &&
+      (get_nb_neighbor(*island) ==
+       (get_value(island->information_island) + 1) / 2) &&
+      (get_finished(island->information_island) == 0)) {
+    if ((island->up_neighbor != NULL) &&
+        (is_locked(island, island->up_neighbor, UP, grid) == 0) &&
+        (get_nb_bridge_up(island->information_island) < 1)) {
+      island->linked_up_island = island->up_neighbor;
+      set_nb_bridge_up(&(island->information_island), 1);
+      island->linked_up_island->linked_down_island = island;
+      set_nb_bridge_down(&(island->linked_up_island->information_island), 1);
+      lock(island, island->up_neighbor, UP, grid);
+      validate_island(island->linked_up_island);
+    }
+    if ((island->left_neighbor != NULL) &&
+        (is_locked(island, island->left_neighbor, LEFT, grid) == 0) &&
+        (get_nb_bridge_left(island->information_island) < 1)) {
+      island->linked_left_island = island->left_neighbor;
+      set_nb_bridge_left(&(island->information_island), 1);
+      island->linked_left_island->linked_right_island = island;
+      set_nb_bridge_right(&(island->linked_left_island->information_island), 1);
+      lock(island, island->left_neighbor, LEFT, grid);
+      validate_island(island->linked_left_island);
+    }
+    if ((island->down_neighbor != NULL) &&
+        (is_locked(island, island->down_neighbor, DOWN, grid) == 0) &&
+        (get_nb_bridge_down(island->information_island) < 1)) {
+      island->linked_down_island = island->down_neighbor;
+      set_nb_bridge_down(&(island->information_island), 1);
+      island->linked_down_island->linked_up_island = island;
+      set_nb_bridge_up(&(island->linked_down_island->information_island), 1);
+      lock(island, island->down_neighbor, DOWN, grid);
+      validate_island(island->linked_down_island);
+    }
+    if ((island->right_neighbor != NULL) &&
+        (is_locked(island, island->right_neighbor, RIGHT, grid) == 0) &&
+        (get_nb_bridge_right(island->information_island) < 1)) {
+      island->linked_right_island = island->right_neighbor;
+      set_nb_bridge_right(&(island->information_island), 1);
+      island->linked_right_island->linked_left_island = island;
+      set_nb_bridge_left(&(island->linked_right_island->information_island), 1);
+      lock(island, island->right_neighbor, RIGHT, grid);
+      validate_island(island->linked_right_island);
+    }
+    validate_island(island);
+  }
+}
+
+/* Checks the island and if it only has one neighbor who is not finished then
+we add one or two bridges (depending on the number of bridges already done)
+between the island and its neighbor */
+void heuristic_neighbor_finished(Island* island, Grid* grid) {
+  if (island->up_neighbor != NULL)
+    is_locked(island, island->up_neighbor, UP, grid);
+  if (island->down_neighbor != NULL)
+    is_locked(island, island->down_neighbor, DOWN, grid);
+  if (island->left_neighbor != NULL)
+    is_locked(island, island->left_neighbor, LEFT, grid);
+  if (island->right_neighbor != NULL)
+    is_locked(island, island->right_neighbor, RIGHT, grid);
+
+  if ((get_nb_neighbor(*island) - get_nb_neighbor_finished(*island)) == 1 &&
+      get_finished(island->information_island) == 0) {
+    if ((island->up_neighbor != NULL) &&
+        (is_locked(island, island->up_neighbor, UP, grid) == 0) &&
+        (get_finished(island->up_neighbor->information_island) == 0) &&
+        (get_value(island->information_island) - get_nb_bridge(*island) < 3)) {
+      island->linked_up_island = island->up_neighbor;
+      set_nb_bridge_up(
+          &(island->information_island),
+          get_nb_bridge_up(island->information_island) +
+              (get_value(island->information_island) - get_nb_bridge(*island)));
+      island->linked_up_island->linked_down_island = island;
+      set_nb_bridge_down(&(island->linked_up_island->information_island),
+                         get_nb_bridge_up(island->information_island));
+      lock(island, island->up_neighbor, UP, grid);
+      validate_island(island->linked_up_island);
+    }
+    if ((island->left_neighbor != NULL) &&
+        (is_locked(island, island->left_neighbor, LEFT, grid) == 0) &&
+        (get_finished(island->left_neighbor->information_island) == 0) &&
+        (get_value(island->information_island) - get_nb_bridge(*island) < 3)) {
+      island->linked_left_island = island->left_neighbor;
+      set_nb_bridge_left(
+          &(island->information_island),
+          get_nb_bridge_left(island->information_island) +
+              (get_value(island->information_island) - get_nb_bridge(*island)));
+      island->linked_left_island->linked_right_island = island;
+      set_nb_bridge_right(&(island->linked_left_island->information_island),
+                          get_nb_bridge_left(island->information_island));
+      lock(island, island->left_neighbor, LEFT, grid);
+      validate_island(island->linked_left_island);
+    }
+    if ((island->down_neighbor != NULL) &&
+        (is_locked(island, island->down_neighbor, DOWN, grid) == 0) &&
+        (get_finished(island->down_neighbor->information_island) == 0) &&
+        (get_value(island->information_island) - get_nb_bridge(*island) < 3)) {
+      island->linked_down_island = island->down_neighbor;
+      set_nb_bridge_down(
+          &(island->information_island),
+          get_nb_bridge_down(island->information_island) +
+              (get_value(island->information_island) - get_nb_bridge(*island)));
+      island->linked_down_island->linked_up_island = island;
+      set_nb_bridge_up(&(island->linked_down_island->information_island),
+                       get_nb_bridge_down(island->information_island));
+      lock(island, island->down_neighbor, DOWN, grid);
+      validate_island(island->linked_down_island);
+    }
+    if ((island->right_neighbor != NULL) &&
+        (is_locked(island, island->right_neighbor, RIGHT, grid) == 0) &&
+        (get_finished(island->right_neighbor->information_island) == 0) &&
+        (get_value(island->information_island) - get_nb_bridge(*island) < 3)) {
+      island->linked_right_island = island->right_neighbor;
+      set_nb_bridge_right(
+          &(island->information_island),
+          get_nb_bridge_right(island->information_island) +
+              (get_value(island->information_island) - get_nb_bridge(*island)));
+      island->linked_right_island->linked_left_island = island;
+      set_nb_bridge_left(&(island->linked_right_island->information_island),
+                         get_nb_bridge_right(island->information_island));
+      lock(island, island->right_neighbor, RIGHT, grid);
+      validate_island(island->linked_right_island);
+    }
+    set_finished(&(island->information_island), 1);
+    grid->heuristic_used++;
+  }
+}
+
+Island* choice_and_draw_random_bridge(Grid* grid, unsigned nb_island) {
+  Island* chosen_island = NULL;
+  unsigned nb_bridges_to_do = 8;
+  unsigned nb_bridges_tmp;
+  unsigned nb_neighbor_finished = 0;
+  /* We choose the island where we will draw the bridge */
+  for (unsigned i = 0; i < nb_island; i++) {
+    if ((get_finished(grid->islands[i].information_island) != 1) &&
+        (get_up_chosen(grid->islands[i].information_backtracking) +
+         get_down_chosen(grid->islands[i].information_backtracking) +
+         get_left_chosen(grid->islands[i].information_backtracking) +
+         get_right_chosen(grid->islands[i].information_backtracking) <
+         get_nb_neighbor(grid->islands[i])- get_nb_neighbor_finished(grid->islands[i])) &&
+        (get_stuck_island(grid->islands[i].information_backtracking) != 1)) {
+      nb_bridges_tmp = get_value(grid->islands[i].information_island) -
+                       get_nb_bridge(grid->islands[i]);
+      if (nb_bridges_tmp < nb_bridges_to_do) {
+        nb_bridges_to_do = nb_bridges_tmp;
+        nb_neighbor_finished = get_nb_neighbor_finished(grid->islands[i]);
+        chosen_island = &(grid->islands[i]);
+      } else if (nb_bridges_tmp == nb_bridges_to_do) {
+        if (get_nb_neighbor_finished(grid->islands[i]) > nb_neighbor_finished) {
+          nb_neighbor_finished = get_nb_neighbor_finished(grid->islands[i]);
+          chosen_island = &(grid->islands[i]);
+        }
+      }
+    }
+  }
+
+  if(chosen_island == NULL)
+    return chosen_island;
+
+  if ((chosen_island->up_neighbor != NULL) &&
+      (is_locked(chosen_island, chosen_island->up_neighbor, UP, grid) == 0) &&
+      (get_finished(chosen_island->up_neighbor->information_island) == 0) &&
+      (get_nb_bridge_up(chosen_island->information_island) < 2) &&
+      (get_up_chosen(chosen_island->information_backtracking) != 1) &&
+      (get_down_chosen(chosen_island->up_neighbor->information_backtracking) != 1)) {
+    chosen_island->linked_up_island = chosen_island->up_neighbor;
+    set_nb_bridge_up(&(chosen_island->information_island),
+                     get_nb_bridge_up(chosen_island->information_island) + 1);
+    chosen_island->linked_up_island->linked_down_island = chosen_island;
+    set_nb_bridge_down(&(chosen_island->linked_up_island->information_island),
+                       get_nb_bridge_up(chosen_island->information_island));
+    lock(chosen_island, chosen_island->up_neighbor, UP, grid);
+    validate_island(chosen_island->linked_up_island);
+    validate_island(chosen_island);
+    set_up_chosen(&(chosen_island->information_backtracking), 1);
+    set_down_chosen(&(chosen_island->up_neighbor->information_backtracking), 1);
+  } else if ((chosen_island->down_neighbor != NULL) &&
+             (is_locked(chosen_island, chosen_island->down_neighbor, DOWN,
+                        grid) == 0) &&
+             (get_finished(chosen_island->down_neighbor->information_island) ==
+              0) &&
+             (get_nb_bridge_down(chosen_island->information_island) < 2) &&
+             (get_down_chosen(chosen_island->information_backtracking) != 1) &&
+             (get_up_chosen(chosen_island->down_neighbor->information_backtracking) != 1)) {
+    chosen_island->linked_down_island = chosen_island->down_neighbor;
+    set_nb_bridge_down(
+        &(chosen_island->information_island),
+        get_nb_bridge_down(chosen_island->information_island) + 1);
+    chosen_island->linked_down_island->linked_up_island = chosen_island;
+    set_nb_bridge_up(&(chosen_island->linked_down_island->information_island),
+                     get_nb_bridge_down(chosen_island->information_island));
+    lock(chosen_island, chosen_island->down_neighbor, DOWN, grid);
+    validate_island(chosen_island->linked_down_island);
+    validate_island(chosen_island);
+    set_down_chosen(&(chosen_island->information_backtracking), 1);
+    set_up_chosen(&(chosen_island->down_neighbor->information_backtracking), 1);
+  } else if ((chosen_island->left_neighbor != NULL) &&
+             (is_locked(chosen_island, chosen_island->left_neighbor, LEFT,
+                        grid) == 0) &&
+             (get_finished(chosen_island->left_neighbor->information_island) ==
+              0) &&
+             (get_nb_bridge_left(chosen_island->information_island) < 2) &&
+             (get_left_chosen(chosen_island->information_backtracking) != 1) &&
+             (get_right_chosen(chosen_island->left_neighbor->information_backtracking) != 1)) {
+    chosen_island->linked_left_island = chosen_island->left_neighbor;
+    set_nb_bridge_left(
+        &(chosen_island->information_island),
+        get_nb_bridge_left(chosen_island->information_island) + 1);
+    chosen_island->linked_left_island->linked_right_island = chosen_island;
+    set_nb_bridge_right(
+        &(chosen_island->linked_left_island->information_island),
+        get_nb_bridge_left(chosen_island->information_island));
+    lock(chosen_island, chosen_island->left_neighbor, LEFT, grid);
+    validate_island(chosen_island->linked_left_island);
+    validate_island(chosen_island);
+    set_left_chosen(&(chosen_island->information_backtracking), 1);
+    set_right_chosen(&(chosen_island->left_neighbor->information_backtracking), 1);
+  } else if ((chosen_island->right_neighbor != NULL) &&
+             (is_locked(chosen_island, chosen_island->right_neighbor, RIGHT,
+                        grid) == 0) &&
+             (get_finished(chosen_island->right_neighbor->information_island) ==
+              0) &&
+             (get_nb_bridge_right(chosen_island->information_island) < 2) &&
+             (get_right_chosen(chosen_island->information_backtracking) != 1) &&
+             (get_left_chosen(chosen_island->right_neighbor->information_backtracking) != 1)) {
+    chosen_island->linked_right_island = chosen_island->right_neighbor;
+    set_nb_bridge_right(
+        &(chosen_island->information_island),
+        get_nb_bridge_right(chosen_island->information_island) + 1);
+    chosen_island->linked_right_island->linked_left_island = chosen_island;
+    set_nb_bridge_left(
+        &(chosen_island->linked_right_island->information_island),
+        get_nb_bridge_right(chosen_island->information_island));
+    lock(chosen_island, chosen_island->right_neighbor, RIGHT, grid);
+    validate_island(chosen_island->linked_right_island);
+    validate_island(chosen_island);
+    set_right_chosen(&(chosen_island->information_backtracking), 1);
+    set_left_chosen(&(chosen_island->right_neighbor->information_backtracking), 1);
+  }
+  else {
+    //printf("tto\n");
+    set_stuck_island(&(chosen_island->information_backtracking), 1);
+    return choice_and_draw_random_bridge(grid, nb_island);
+  }
+
+  return chosen_island;
+}
+
+int island_exist(unsigned x, unsigned y, Grid *grid, unsigned nb_island) {
+    for(unsigned i = 0; i < nb_island; i++) {
+        if(get_x(grid->islands[i].position) == x && get_y(grid->islands[i].position) == y)
+            return i;
+    }
+    return -1;
+}
+
+unsigned is_place_unavailable(Island island, Grid *grid, unsigned size_grid, unsigned nb_island) {
+    unsigned x = get_x(island.position);
+    unsigned y = get_y(island.position);
+
+    for(unsigned i = 0; i < grid->pos; i++) {
+        if(grid->bridges_x[i] == x && grid->bridges_y[i] == y)
+            return 1;
+    }
+    for(unsigned j = 0; j < nb_island; j++) {
+        if(x > 0 && get_x(grid->islands[j].position) == x - 1 &&
+            get_y(grid->islands[j].position) == y)
+            return 1;
+        if(x < size_grid - 1 && get_x(grid->islands[j].position) == x + 1 &&
+            get_y(grid->islands[j].position) == y)
+            return 1;
+        if(y > 0 && get_x(grid->islands[j].position) == x &&
+            get_y(grid->islands[j].position) == y - 1)
+            return 1;
+        if(y < size_grid - 1 && get_x(grid->islands[j].position) == x &&
+            get_y(grid->islands[j].position) == y + 1)
+            return 1;
+
+    }
+
+    return 0;
+}
+
+void simple_generator(unsigned size_grid, unsigned nb_island) {
+  Grid* grid = malloc(sizeof(Grid));
+  if (grid == NULL) {
+    fprintf(stderr, "Allocation error.\n");
+    exit(EXIT_FAILURE);
+  }
+  initialize(grid, size_grid, nb_island);
+
+  unsigned x, y, nb_island_chosen;
+
+  srand(time(NULL));
+
+  x = rand()%size_grid;
+  y = rand()%size_grid;
+  set_x(&(grid->islands[0].position), x);
+  set_y(&(grid->islands[0].position), y);
+  nb_island_chosen = 1;
+
+  unsigned pos_island_chosen = 0;
+  unsigned dir_chosen = 0;
+  unsigned dist_chosen = 0;
+  unsigned nb_bridge_chosen = 0;
+  while(nb_island_chosen < nb_island) {
+    pos_island_chosen = rand()%nb_island_chosen;
+    dir_chosen = rand()%(RIGHT+1);
+    if(dir_chosen == UP && get_y(grid->islands[pos_island_chosen].position) > 1 &&
+       grid->islands[pos_island_chosen].up_neighbor == NULL) {
+        dist_chosen = rand()%(get_y(grid->islands[pos_island_chosen].position) - 1) + 1;
+        set_x(&(grid->islands[nb_island_chosen].position),
+              get_x(grid->islands[pos_island_chosen].position));
+        set_y(&(grid->islands[nb_island_chosen].position),
+              get_y(grid->islands[pos_island_chosen].position) - dist_chosen - 1);
+        if(is_locked(&(grid->islands[pos_island_chosen]), &(grid->islands[nb_island_chosen]), UP, grid) == 0 &&
+           is_place_unavailable(grid->islands[nb_island_chosen], grid, size_grid, nb_island_chosen - 1) == 0) {
+            int does_island_exist = island_exist(get_x(grid->islands[nb_island_chosen].position),
+                            get_y(grid->islands[nb_island_chosen].position),
+                            grid, nb_island_chosen - 1);
+            if(does_island_exist == -1) {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_up(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_down(&(grid->islands[nb_island_chosen].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].up_neighbor = &(grid->islands[nb_island_chosen]);
+                grid->islands[nb_island_chosen].down_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].up_neighbor, UP, grid);
+
+                nb_island_chosen++;
+            }
+            else {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_up(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_down(&(grid->islands[does_island_exist].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].up_neighbor = &(grid->islands[does_island_exist]);
+                grid->islands[does_island_exist].down_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].up_neighbor, UP, grid);
+            }
+        }
+
+    }
+    if(dir_chosen == DOWN && get_y(grid->islands[pos_island_chosen].position) < size_grid - 2 &&
+       grid->islands[pos_island_chosen].down_neighbor == NULL) {
+        dist_chosen = rand()%(size_grid-get_y(grid->islands[pos_island_chosen].position) - 2) + 1;
+        set_x(&(grid->islands[nb_island_chosen].position),
+              get_x(grid->islands[pos_island_chosen].position));
+        set_y(&(grid->islands[nb_island_chosen].position),
+              get_y(grid->islands[pos_island_chosen].position) + dist_chosen + 1);
+        if(is_locked(&(grid->islands[pos_island_chosen]), &(grid->islands[nb_island_chosen]), DOWN, grid) == 0 &&
+           is_place_unavailable(grid->islands[nb_island_chosen], grid, size_grid, nb_island_chosen - 1) == 0) {
+            int does_island_exist = island_exist(get_x(grid->islands[nb_island_chosen].position),
+                            get_y(grid->islands[nb_island_chosen].position),
+                            grid, nb_island_chosen - 1);
+            if(does_island_exist == -1) {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_down(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_up(&(grid->islands[nb_island_chosen].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].down_neighbor = &(grid->islands[nb_island_chosen]);
+                grid->islands[nb_island_chosen].up_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].down_neighbor, DOWN, grid);
+
+                nb_island_chosen++;
+            }
+            else {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_down(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_up(&(grid->islands[does_island_exist].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].down_neighbor = &(grid->islands[does_island_exist]);
+                grid->islands[does_island_exist].up_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].down_neighbor, DOWN, grid);
+            }
+        }
+    }
+    if(dir_chosen == LEFT && get_x(grid->islands[pos_island_chosen].position) > 1 &&
+       grid->islands[pos_island_chosen].left_neighbor == NULL) {
+        dist_chosen = rand()%(get_x(grid->islands[pos_island_chosen].position) - 1) + 1;
+        set_x(&(grid->islands[nb_island_chosen].position),
+              get_x(grid->islands[pos_island_chosen].position) - dist_chosen - 1);
+        set_y(&(grid->islands[nb_island_chosen].position),
+              get_y(grid->islands[pos_island_chosen].position));
+        if(is_locked(&(grid->islands[pos_island_chosen]), &(grid->islands[nb_island_chosen]), LEFT, grid) == 0 &&
+           is_place_unavailable(grid->islands[nb_island_chosen], grid, size_grid, nb_island_chosen - 1) == 0) {
+            int does_island_exist = island_exist(get_x(grid->islands[nb_island_chosen].position),
+                            get_y(grid->islands[nb_island_chosen].position),
+                            grid, nb_island_chosen - 1);
+            if(does_island_exist == -1) {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_left(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_right(&(grid->islands[nb_island_chosen].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].left_neighbor = &(grid->islands[nb_island_chosen]);
+                grid->islands[nb_island_chosen].right_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].left_neighbor, LEFT, grid);
+
+                nb_island_chosen++;
+            }
+            else {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_left(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_right(&(grid->islands[does_island_exist].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].left_neighbor = &(grid->islands[does_island_exist]);
+                grid->islands[does_island_exist].right_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].left_neighbor, LEFT, grid);
+            }
+        }
+    }
+    if(dir_chosen == RIGHT && get_x(grid->islands[pos_island_chosen].position) < size_grid - 2 &&
+       grid->islands[pos_island_chosen].right_neighbor == NULL) {
+        dist_chosen = rand()%(size_grid-get_x(grid->islands[pos_island_chosen].position) - 2) + 1;
+        set_x(&(grid->islands[nb_island_chosen].position),
+              get_x(grid->islands[pos_island_chosen].position) + dist_chosen + 1);
+        set_y(&(grid->islands[nb_island_chosen].position),
+              get_y(grid->islands[pos_island_chosen].position));
+        if(is_locked(&(grid->islands[pos_island_chosen]), &(grid->islands[nb_island_chosen]), RIGHT, grid) == 0 &&
+           is_place_unavailable(grid->islands[nb_island_chosen], grid, size_grid, nb_island_chosen - 1) == 0) {
+            int does_island_exist = island_exist(get_x(grid->islands[nb_island_chosen].position),
+                            get_y(grid->islands[nb_island_chosen].position),
+                            grid, nb_island_chosen - 1);
+            if(does_island_exist == -1) {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_right(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_left(&(grid->islands[nb_island_chosen].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].right_neighbor = &(grid->islands[nb_island_chosen]);
+                grid->islands[nb_island_chosen].left_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].right_neighbor, RIGHT, grid);
+
+                nb_island_chosen++;
+            }
+            else {
+                nb_bridge_chosen = rand()%2 + 1;
+                set_nb_bridge_right(&(grid->islands[pos_island_chosen].information_island), nb_bridge_chosen);
+                set_nb_bridge_left(&(grid->islands[does_island_exist].information_island), nb_bridge_chosen);
+
+                grid->islands[pos_island_chosen].right_neighbor = &(grid->islands[does_island_exist]);
+                grid->islands[does_island_exist].left_neighbor = &(grid->islands[pos_island_chosen]);
+                lock(&(grid->islands[pos_island_chosen]), grid->islands[pos_island_chosen].right_neighbor, RIGHT, grid);
+            }
+        }
+    }
+  }
+
+  for(unsigned i = 0; i<nb_island; i++) {
+    set_value(&(grid->islands[i].information_island), get_nb_bridge(grid->islands[i]));
+  }
+
+  print_Grid(grid, nb_island);
+
+  free(grid->bridges_x);
+  free(grid->bridges_y);
+  free(grid->bridges_d);
+  free(grid->islands);
+  free(grid);
+}
+
+void simple_solver(Grid* grid, unsigned nb_island) {
+  for (unsigned i = 0; i < nb_island; i++) {
+    heuristic_n1(&(grid->islands[i]), grid);
+    heuristic_n2(&(grid->islands[i]), grid);
+    heuristic_n3(&(grid->islands[i]), grid);
+  }
+  while (grid->heuristic_used > 0) {
+    grid->heuristic_used = 0;
+    for (unsigned i = 0; i < nb_island; i++) {
+      heuristic_neighbor_finished(&(grid->islands[i]), grid);
+    }
+  }
+
+}
+
+void complex_solver(Grid* grid, unsigned size_grid, unsigned nb_island) {
+  simple_solver(grid, nb_island);
+
+  print_Grid(grid, nb_island);
+
+  if(is_correct(grid, nb_island) != 1) {
+    fprintf(stderr, "Simple solver found an incorrect grid error. ");
+    fprintf(stderr, "Impossible for the backtracking to work.\n");
+    free(grid->bridges_x);
+    free(grid->bridges_y);
+    free(grid->islands);
+    free(grid);
+    exit(EXIT_FAILURE);
+  }
+
+  Stack s = create_Stack();
+
+  insert_value(s, *grid, size_grid, nb_island);
+
+  grid->chosen_island = choice_and_draw_random_bridge(grid, nb_island);
+
+  while (is_game_over(grid, nb_island) != 1) {
+    if((is_correct(grid, nb_island) == 1) && (grid->chosen_island != NULL)) {
+       // printf("flag insert\n");
+        insert_value(s, *grid, size_grid, nb_island);
+        for(unsigned i = 0; i < nb_island; i++) {
+            grid->islands[i].information_backtracking = 0;
+        }
+    }
+
+    if(grid->chosen_island == NULL) {
+        //printf("flag chosen island null\n");
+        for(unsigned i = 0; i < nb_island; i++) {
+            grid->islands[i].information_backtracking = 0;
+        }
+        copy_game(s->tab[s->size-1], grid, size_grid, nb_island);
+        delete_game(s, &(s->tab[s->size-1]));
+    }
+
+    if(is_correct(grid, nb_island) != 1) {
+        //printf("flag is correct pas a 1\n");
+        copy_game_but_not_backtracking(s->tab[s->size-1], grid, size_grid, nb_island);
+    }
+
+    grid->chosen_island = choice_and_draw_random_bridge(grid, nb_island);
+
+    if(grid->chosen_island != NULL) {
+      /*  printf("ile choisi %d %d\n", get_x(grid->chosen_island->position), get_y(grid->chosen_island->position));
+        printf("nb bridge up %d\n", get_nb_bridge_up(grid->chosen_island->information_island));
+        printf("nb bridge down %d\n", get_nb_bridge_down(grid->chosen_island->information_island));
+        printf("nb bridge left %d\n", get_nb_bridge_left(grid->chosen_island->information_island));
+        printf("nb bridge right %d\n", get_nb_bridge_right(grid->chosen_island->information_island));
+        printf("info backtracking %d\n", grid->chosen_island->information_backtracking);*/
+
+        grid->heuristic_used = 1;
+        while(grid->heuristic_used > 0) {
+            grid->heuristic_used = 0;
+            for (unsigned i = 0; i < nb_island; i++) {
+                heuristic_neighbor_finished(&(grid->islands[i]), grid);
+            }
+        }
+    }
+    //print_Grid(grid, nb_island);
+    //printf("taille Stack %d\n", s->size);
+  }
+  delete_Stack(s);
+}
+
+/* Not useful anymore */
+/* Used to print the Grid in a file (when the Grid was not a structure) */
+void print_Grid_in_file(unsigned** grid) {
+  FILE* outputFile = NULL;
+
+  outputFile =
+      fopen("../hashiOutput.txt", "w"); /* Creates a file to write in. */
+  for (unsigned i = 0; i < 6; i++) {
+    if (i > 0)
+      fputc('\n', outputFile);
+    for (unsigned j = 0; j < 6; j++) {
+      if (grid[i][j] + INT_TO_CHAR == '0')
+        fputc('_', outputFile);
+      else
+        fputc(grid[i][j] + INT_TO_CHAR, outputFile);
+    }
+  }
+  fclose(outputFile);
+}
+
+/* Generate the state of the game in a file */
+
+void generate_game_file(Grid* grid, unsigned size_grid, unsigned nb_island, char* g_value){
+  FILE* output = NULL;
+  output = fopen("output.txt", "w");
+  FILE* output_final = NULL;
+  output_final = fopen(g_value, "w");
+  char buf[1];
+  for(unsigned i = 0; i < size_grid*size_grid; ++i){
+      fwrite("_", sizeof(char), 1, output);
+  }
+  rewind(output);
+  for(unsigned i = 0; i < nb_island; ++i){
+      int position = get_x(grid->islands[i].position) + size_grid*get_y(grid->islands[i].position);
+      char value = get_value(grid->islands[i].information_island)+INT_TO_CHAR;
+      fseek(output,position,SEEK_SET);
+      fwrite(&value, sizeof(char), 1, output);
+      rewind(output);
+    }
+  for(unsigned i = 0; i < grid->pos; ++i){
+      int position = grid->bridges_x[i] + size_grid*grid->bridges_y[i];
+      fseek(output,position,SEEK_SET);
+      if(grid->bridges_d[i] == 0){
+        fwrite("S", sizeof(char), 1, output);
+      }
+      else{
+        fwrite("D", sizeof(char), 1, output);
+      }
+      rewind(output);
+    }
+  fclose(output);
+  fopen("output.txt", "r");
+  for(unsigned i = 0; i < size_grid; ++i){
+    for(unsigned j = 0; j < size_grid; ++j){
+      fread(&buf,1,1,output);
+      fwrite(&buf, sizeof(char), 1, output_final);
+    }
+    fwrite("\n", sizeof(char), 1, output_final);
+  }
+  fclose(output);
+  fclose(output_final);
+}
+
+
+/* Main */
+
+int main(int argc, char** argv) {
+
+  int c;
+  int generate = 0;
+  int verbose = 0;
+  int output = 0;
+  char *o_value = NULL;
+  char *f_value = NULL;
+  char *s_value = NULL;
+  char *i_value = NULL;
+  int size = 0;
+  int islands = 0;
+
+    while ((c = getopt(argc, argv, "o:gvf:s:i:")) != -1)
+    switch (c)
+    {
+      case 'o':
+        o_value = optarg;
+        output = 1;
+        break;
+      case 'g':
+        generate = 1;
+        break;
+      case 'v':
+        verbose = 1;
+        break;
+      case 'f':
+        f_value = optarg;
+        break;
+      case 'i':
+        i_value = optarg;
+        islands = atoi(i_value);
+        break;
+      case 's':
+        s_value = optarg;
+        size = atoi(s_value);
+        break;
+      case '?':
+        fprintf (stderr, "Unknown option `-%c'.\n", c);
+        return 1;
+}
+
+  /* Checks if there are enough arguments */
+  if (argc < 2) {
+    fprintf(stderr, "Not enough arguments.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (generate == 0){
+  /* Opens the file and check if it succeeded. */
+  FILE* inputFile;
+  inputFile = fopen(f_value, "r");
+  if (inputFile == NULL) { /* Check if the file exists. */
+    fprintf(stderr, "Error reading file.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  unsigned size_grid = get_size_grid(inputFile);
+  if(size_grid > MAX_SIZE_GRID) {
+    fprintf(stderr, "Error size of the grid too high.\n");
+    fclose(inputFile);
+    exit(EXIT_FAILURE);
+  }
+
+  rewind(inputFile);
+  unsigned nb_island = get_nb_island(inputFile); /* number of islands */
+  rewind(inputFile);
+
+  /* Allocation pour grid */
+  Grid* grid = malloc(sizeof(Grid));
+  if (grid == NULL) {
+    fprintf(stderr, "Allocation error.\n");
+    fclose(inputFile);
+    exit(EXIT_FAILURE);
+  }
+
+  /* Initialize the Grid and fills it with informations of the islands */
+  initialize(grid, size_grid, nb_island);
+  fill_grid(inputFile, grid, size_grid);
+  fill_grid_neighbor(grid, size_grid, nb_island);
+  fclose(inputFile);
+
+
+  /* Uses a complex solver to try to solve the Grid */
+  complex_solver(grid, size_grid, nb_island);
+  bridge_doubler(grid, nb_island);
+
+  /* Prints the result */
+  print_Grid(grid, nb_island);
+/* Generate the state of the grid */
+  if (output == 1){
+    generate_game_file(grid, size_grid, nb_island, o_value);
+  }
+  free(grid->bridges_x);
+  free(grid->bridges_y);
+  free(grid->bridges_d);
+  free(grid->islands);
+  free(grid);
+  }
+  if (generate == 1){
+    simple_generator(size, islands);
+  }
+  return (0);
+}

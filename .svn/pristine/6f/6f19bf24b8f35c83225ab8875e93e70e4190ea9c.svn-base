@@ -1,0 +1,26 @@
+BIN 	= hashiwokakero
+
+.PHONY: all clean cleanall test
+
+all: $(BIN)
+
+hashiwokakero:
+	make -C src
+
+testsolve:
+	make testsolve -C src
+
+testgen:
+	make testgen -C src
+
+testboth:
+	make testboth -C src
+
+testgengraph:
+	make tetgengraph -C src
+
+clean:
+	make clean -C src
+
+cleanall: clean
+	make cleanall -C src

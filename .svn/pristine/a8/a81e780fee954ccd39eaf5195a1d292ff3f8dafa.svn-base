@@ -1,0 +1,274 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "hashiwokakero.h"
+
+int distance(int a, int b){
+    if (a<b)
+         return b-a;
+    return a-b;
+}
+
+int getNbIsland(FILE *_file) {
+    int nbIsland = 0;
+    if(_file == NULL) // vérification que le fichier existe.
+        printf("Erreur lecture de fichier\n");
+    else
+    {
+        char charRead;
+        charRead = fgetc(_file);
+        while(charRead != EOF) {
+            if((charRead-intToChar<9)&&(charRead-intToChar>0)) {
+                nbIsland++;
+            }
+            charRead = fgetc(_file);
+        }
+    }
+      return nbIsland;
+}
+
+int get_nb_neighbor(Island island){
+  int cpt = 0;
+  if (island.upNeighbor!=NULL)
+    cpt++;
+  if (island.downNeighbor!=NULL)
+    cpt++;
+  if (island.leftNeighbor!=NULL)
+    cpt++;
+  if (island.rightNeighbor!=NULL)
+    cpt++;
+  return cpt;
+}
+
+int get_nb_bridge(Island island){
+  int cpt = 0;
+  if (island.nbBridgeUp>0)
+    cpt+=island.nbBridgeUp;
+  if (island.nbBridgeDown>0)
+    cpt+=island.nbBridgeDown;
+  if (island.nbBridgeLeft>0)
+    cpt+=island.nbBridgeLeft;
+  if (island.nbBridgeRight>0)
+    cpt+=island.nbBridgeRight;
+  return cpt;
+}
+
+void fillGrid(FILE *_file, Grid *grid) {
+  if(_file == NULL) // vérification que le fichier existe.
+      printf("Erreur lecture de fichier\n");
+  else
+  {
+    char charRead;
+    int i = 0;
+    int j = 0;
+    int a = 0;
+    charRead = fgetc(_file);
+    while(charRead != EOF) {
+        if(charRead == '_') { // si la grille a un '_' on le remplace par un 0 dans le tableau.
+            j++;
+        }
+        else if(charRead == '\n') {
+            i++;
+            j = 0;
+        }
+        else if((charRead-intToChar<9)&&(charRead-intToChar>0)) {
+            grid->islands[a].x=j;
+            grid->islands[a].y=i;
+            grid->islands[a].value=charRead-intToChar;
+            j++;
+            a++;
+        }
+        else
+            j++;
+        charRead = fgetc(_file);
+
+    }
+    }
+}
+
+void fillGridNeighbor(Grid *grid) {
+    int i, j;
+    int positionNeighbor=-1;
+    for(i=0;i<nbIsland;i++) {
+        if((grid->islands[i].x != 0)&&(grid->islands[i].leftNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].y == grid->islands[i].y)&&(grid->islands[j].x<grid->islands[i].x))
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].x,grid->islands[i].x))>(distance(grid->islands[j].x,grid->islands[i].x)))
+                            positionNeighbor=j;
+                    }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].leftNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].rightNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+        if((grid->islands[i].x != sizeGrid)&&(grid->islands[i].rightNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].y == grid->islands[i].y)&&(grid->islands[j].x>grid->islands[i].x))
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].x,grid->islands[i].x))>(distance(grid->islands[j].x,grid->islands[i].x)))
+                            positionNeighbor=j;
+                    }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].rightNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].leftNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+        if((grid->islands[i].y != 0)&&(grid->islands[i].upNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].x == grid->islands[i].x)&&(grid->islands[j].y<grid->islands[i].y))
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].y,grid->islands[i].y))>(distance(grid->islands[j].y,grid->islands[i].y)))
+                            positionNeighbor=j;
+                    }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].upNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].downNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+        if((grid->islands[i].y != sizeGrid)&&(grid->islands[i].downNeighbor == NULL)) {
+            for(j=0;j<nbIsland&&j!=i;j++) {
+                if((grid->islands[j].x == grid->islands[i].x)&&(grid->islands[j].y>grid->islands[i].y))
+                    if(positionNeighbor==-1)
+                        positionNeighbor=j;
+                    else {
+                        if((distance(grid->islands[positionNeighbor].y,grid->islands[i].y))>(distance(grid->islands[j].y,grid->islands[i].y)))
+                            positionNeighbor=j;
+                    }
+            }
+            if(positionNeighbor>-1) {
+                    grid->islands[i].downNeighbor=&(grid->islands[positionNeighbor]);
+                    grid->islands[positionNeighbor].upNeighbor=&(grid->islands[i]);
+            }
+            positionNeighbor=-1;
+        }
+    }
+
+}
+
+void printGrid(int **grid) {
+    int i, j;
+    for(i = 0; i < sizeGrid; i++) {
+            if(i > 0)
+                printf("\n");
+        for(j = 0; j < sizeGrid; j++)
+            printf("%d", grid[i][j]);
+    }
+}
+
+void printGridInFile(int** grid) {
+    FILE *outputFile = NULL;
+
+    outputFile = fopen("../hashiOutput.txt", "w"); // on crée un fichier "hashiOutput.txt pour écrire la grille.
+    int i, j;
+    for(i = 0; i < sizeGrid; i++) {
+            if(i > 0)
+                fputc('\n', outputFile);
+        for(j = 0; j < sizeGrid; j++) {
+            if(grid[i][j] + intToChar == '0')
+                fputc('_', outputFile);
+            else
+                fputc(grid[i][j] + intToChar, outputFile);
+        }
+    }
+    fclose(outputFile);
+}
+
+/* Solving algorithms */
+
+void heuristic_n2(Island* island){
+  if (get_nb_neighbor(*island)==island->value/2 && island->finished==0){
+    if (island->upNeighbor!=NULL){
+      island->linkedUpIsland=island->upNeighbor;
+      island->nbBridgeUp=2;
+      island->linkedUpIsland->linkedDownIsland=island;
+      island->linkedUpIsland->nbBridgeDown=2;
+    }
+    if (island->leftNeighbor!=NULL){
+      island->linkedLeftIsland=island->leftNeighbor;
+      island->nbBridgeLeft=2;
+      island->linkedLeftIsland->linkedRightIsland=island;
+      island->linkedLeftIsland->nbBridgeRight=2;
+    }
+    if (island->downNeighbor!=NULL){
+      island->linkedDownIsland=island->downNeighbor;
+      island->nbBridgeDown=2;
+      island->linkedDownIsland->linkedUpIsland=island;
+      island->linkedDownIsland->nbBridgeUp=2;
+      }
+    if (island->rightNeighbor!=NULL){
+      island->linkedRightIsland=island->rightNeighbor;
+      island->nbBridgeRight=2;
+      island->linkedRightIsland->linkedLeftIsland=island;
+      island->linkedRightIsland->nbBridgeLeft=2;
+      }
+    island->finished=1;
+  }
+}
+
+/* Main */
+
+int main(int argc, char **argv)
+{
+    int i;
+
+    // ouverture du fichier
+    FILE *inputFile;
+    inputFile = fopen(argv[1], "r");
+    nbIsland = getNbIsland(inputFile);
+    //printf("%d",nbIsland);
+    rewind(inputFile);
+
+    // allocation grille
+    Grid *grid = malloc(sizeof(Grid));
+    grid->islands = malloc(sizeof(Island*) * sizeof(Island) * nbIsland);
+    for(i=0;i<nbIsland;i++) {
+        grid->islands[i].upNeighbor=NULL;
+        grid->islands[i].downNeighbor=NULL;
+        grid->islands[i].leftNeighbor=NULL;
+        grid->islands[i].rightNeighbor=NULL;
+
+        grid->islands[i].linkedUpIsland=NULL;
+        grid->islands[i].linkedDownIsland=NULL;
+        grid->islands[i].linkedLeftIsland=NULL;
+        grid->islands[i].linkedRightIsland=NULL;
+
+        grid->islands[i].nbBridgeUp=0;
+        grid->islands[i].nbBridgeDown=0;
+        grid->islands[i].nbBridgeLeft=0;
+        grid->islands[i].nbBridgeRight=0;
+
+        grid->islands[i].finished=0;
+}
+
+    fillGrid(inputFile, grid);
+    fillGridNeighbor(grid);
+
+    for(i=0;i<nbIsland;i++) {
+      heuristic_n2(&(grid->islands[i]));
+    }
+    for(i=0;i<nbIsland;i++) {
+      printf("nombre de bridges de island[%d] : %d\n", i, get_nb_bridge(grid->islands[i]));
+        if(grid->islands[i].downNeighbor!=NULL) {
+        printf("position : %d %d valeur %d voisin bas en position %d %d avec valeur %d\n",grid->islands[i].x,grid->islands[i].y,grid->islands[i].value,
+               grid->islands[i].downNeighbor->x,grid->islands[i].downNeighbor->y,grid->islands[i].downNeighbor->value);
+        }
+    }
+    fclose(inputFile);
+    free(grid);
+    free(grid->islands);
+
+    return(0);
+}

@@ -1,0 +1,465 @@
+//#include "inshiNoHeya.h"
+#include "composites.h"
+
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include <errno.h>
+
+#define MAX_SIZE 20
+
+typedef struct cell_t Cell;
+struct cell_t {
+  /* Value within the cell. */
+  uint64_t value;
+  /* Required product for cells in the current room. */
+  unsigned long long room_product;
+  /* Sets of factors that make up this room_product. */
+  CompositesSet* composites_set;
+  /* Previous cell in the current room. */
+  Cell* previous;
+  /* Next cell in the current room. */
+  Cell* next;
+};
+
+typedef struct grid_t Grid;
+struct grid_t {
+  /* Grid that we are working on. */
+  Cell** cells;
+  /* Size of this grid. */
+  size_t size;
+};
+
+/* Makes a rightward room in the grid and returns the update grid reading
+ * position. */
+static unsigned int set_rightward_room(Grid* grid,
+                                       unsigned int current_cell,
+                                       unsigned long long room_value,
+                                       unsigned short room_length) {
+  /* We generate a composite set for this room */
+  CompositesSet* room_set = find_composites(room_value);
+
+  /* We skip over cells that have already been assigned */
+  while (grid->cells[current_cell]->room_product != 0)
+    current_cell++;
+
+  /* We set each cell in the room */
+  for (unsigned short i = 0; i < room_length; i++) {
+    /* room_product */
+    grid->cells[current_cell + i]->room_product = room_value;
+
+    /* composites_set */
+    grid->cells[current_cell + i * grid->size]->composites_set = room_set;
+
+    /* previous */
+    if (i > 0)
+      grid->cells[current_cell + i]->previous =
+          grid->cells[current_cell + (i - 1)];
+
+    /* next */
+    if (i < room_length - 1)
+      grid->cells[current_cell + i]->next = grid->cells[current_cell + (i + 1)];
+  }
+
+  return current_cell + room_length;
+}
+
+/* Makes a downward room in the grid and returns the update grid reading
+ * position. */
+static unsigned int set_downward_room(Grid* grid,
+                                      unsigned int current_cell,
+                                      unsigned long long room_value,
+                                      unsigned short room_length) {
+  /* We generate a composite set for this room */
+  CompositesSet* room_set = find_composites(room_value);
+
+  /* We skip over cells that have already been assigned */
+  while (grid->cells[current_cell]->room_product != 0)
+    current_cell++;
+
+  /* We set each cell in the room */
+  for (unsigned short i = 0; i < room_length; i++) {
+    /* room_product */
+    grid->cells[current_cell + i * grid->size]->room_product = room_value;
+
+    /* composites_set */
+    grid->cells[current_cell + i * grid->size]->composites_set = room_set;
+
+    /* previous */
+    if (i > 0)
+      grid->cells[current_cell + i * grid->size]->previous =
+          grid->cells[current_cell + (i - 1) * grid->size];
+
+    /* next */
+    if (i < room_length - 1)
+      grid->cells[current_cell + i * grid->size]->next =
+          grid->cells[current_cell + (i + 1) * grid->size];
+  }
+
+  return current_cell + 1;
+}
+
+/* Allocates a new empty grid and returns a pointer to it. */
+static Grid* initialize_grid(int size) {
+  Grid* grid = malloc(sizeof(Grid));
+
+  grid->size = size;
+  grid->cells = malloc(sizeof(Cell*) * grid->size * grid->size);
+
+  for (unsigned int i = 0; i < grid->size; i++)
+    for (unsigned int j = 0; j < grid->size; j++) {
+      grid->cells[i * grid->size + j] = malloc(sizeof(Cell));
+
+      grid->cells[i * grid->size + j]->value = 0;
+      grid->cells[i * grid->size + j]->room_product = 0;
+      grid->cells[i * grid->size + j]->previous = NULL;
+      grid->cells[i * grid->size + j]->next = NULL;
+    }
+
+  return grid;
+}
+
+/* Checks if all cells of a grid have been filled according to the size it is
+ * expected to have. Returns 1 if it is valid, 0 otherwise. */
+static int check_grid_size(Grid* grid) {
+  for (unsigned int y = 0; y < grid->size; y++)
+    for (unsigned int x = 0; x < grid->size; x++)
+      if (grid->cells[y * grid->size + x]->room_product == 0)
+        return 0;
+
+  return 1;
+}
+
+/* Reads a grid from an input file. */
+static Grid* read_file(const char* path) {
+  const char right_delimiter = 'r';
+  const char bottom_delimiter = 'b';
+  char line[256];
+
+  unsigned long long room_value = 0;
+  unsigned short room_length = 0;
+  unsigned short grid_size = 0;
+
+  unsigned int i = 0;
+  unsigned int current_cell = 0;
+
+  Grid* grid = NULL;
+  FILE* input_file = fopen(path, "r");
+
+  if (input_file != NULL) {
+    /* reads the grid size from the first line */
+    fscanf(input_file, "%s", line);
+
+    grid_size = atoll(line);
+
+    if (grid_size < MAX_SIZE)
+      grid = initialize_grid(grid_size);
+
+    /* reads the input file line by line */
+    while (fscanf(input_file, "%s", line) != EOF) {
+      /* reads the room product value */
+      while (line[i] >= '0' && line[i] <= '9') {
+        room_value = room_value * 10 + line[i++] - '0';
+      }
+
+      if (room_value == 0)
+        printf("Error in input file format.\n");
+
+      if (line[i] == right_delimiter) {
+        i++;
+
+        /* reads the room length */
+        while (line[i] >= '0' && line[i] <= '9') {
+          room_length = room_length * 10 + line[i++] - '0';
+        }
+
+        if (room_length == 0)
+          printf("Error in input file format.\n");
+
+        /* sets all cells in the room and updates the position */
+        current_cell =
+            set_rightward_room(grid, current_cell, room_value, room_length);
+      }
+
+      else if (line[i] == bottom_delimiter) {
+        i++;
+
+        /* reads the room length */
+        while (line[i] >= '0' && line[i] <= '9') {
+          room_length = room_length * 10 + line[i++] - '0';
+        }
+
+        if (room_length == 0)
+          printf("Error in input file format.\n");
+
+        /* sets all cells in the room and updates the position */
+        current_cell =
+            set_downward_room(grid, current_cell, room_value, room_length);
+      }
+
+      else
+        printf("Error in input file format.\n");
+
+      i = 0;
+      room_value = 0;
+      room_length = 0;
+    }
+
+    if (check_grid_size(grid) == 0)
+      printf("The input file is invalid.\n");
+  }
+
+  else
+    printf("Error reading input file.\n");
+
+  errno = 0;
+  if (fclose(input_file) != 0)
+    printf("Error : %d\n", errno);
+
+  return grid;
+}
+
+/* Prints the grid in a human readable way in a new output file. */
+static void print_grid(Grid* grid) {
+  FILE* output_file = fopen("out.txt", "w");
+
+  if (output_file != NULL) {
+    int size = grid->size;
+
+    for (int k = 0; k < size; k++) {
+      fprintf(output_file, "  ___ ");
+    }
+
+    for (int i = 0; i < size; i++) {
+      fprintf(output_file, "\n| ");
+
+      for (int j = 0; j < size; j++) {
+        if (grid->cells[i * size + j]->value < 10)
+          fprintf(output_file, " %" PRIu64 " ",
+                  grid->cells[i * size + j]->value);
+        else if (grid->cells[i * size + j]->value < 100)
+          fprintf(output_file, "%" PRIu64 " ",
+                  grid->cells[i * size + j]->value);
+        else
+          fprintf(output_file, "%" PRIu64, grid->cells[i * size + j]->value);
+
+        if (j == size - 1)
+          fprintf(output_file, " |\n| ");
+        else if (grid->cells[i * size + j]->next ==
+                 grid->cells[i * size + j + 1])
+          fprintf(output_file, "   ");
+        else
+          fprintf(output_file, " | ");
+      }
+
+      for (int j = 0; j < size; j++) {
+        if (j == size)
+          fprintf(output_file, " |");
+        else if (grid->cells[i * size + j]->next ==
+                 grid->cells[(i + 1) * size + j])
+          fprintf(output_file, "   ");
+        else
+          fprintf(output_file, "___");
+
+        fprintf(output_file, "   ");
+      }
+    }
+  } else
+    printf("Error opening output file.\n");
+
+  errno = 0;
+  if (fclose(output_file) != 0)
+    printf("Error : %d\n", errno);
+}
+
+/* Prints each cell of the grid with their coordinates, cell value and room
+ * product. Used for debugging. */
+static void print_values_in_grid(Grid* grid) {
+  printf("Printing values in grid :\n");
+
+  for (unsigned int i = 0; i < grid->size; i++)
+    for (unsigned int j = 0; j < grid->size; j++)
+      printf("Cell (%d,%d) = %lu [%llu]\n", i, j,
+             grid->cells[i * grid->size + j]->value,
+             grid->cells[i * grid->size + j]->room_product);
+
+  printf("\n");
+}
+
+/* Deallocates the memory used by the grid. */
+static void free_grid(Grid* grid) {
+  for (unsigned int i = 0; i < grid->size; i++)
+    for (unsigned int j = 0; j < grid->size; j++) {
+      /* Frees up a CompositesSet assigned to a room */
+      if (grid->cells[i * grid->size + j]->composites_set != NULL) {
+        /* Memory leak due to the following function not working as intended. */
+        /*free_composites_set(grid->cells[i * grid->size +
+         * j]->composites_set);*/
+
+        Cell* iterator = grid->cells[i * grid->size + j];
+        while (iterator->next != NULL) {
+          iterator = iterator->next;
+          iterator->composites_set = NULL;
+        }
+      }
+
+      /* Frees up a cell */
+      free(grid->cells[i * grid->size + j]);
+    }
+
+  free(grid->cells);
+  free(grid);
+}
+
+/* Checks if the row of a given cell has no duplicate numbers. Returns 1 if row
+ * is valid, 0 otherwise. */
+static int check_row(Grid* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  uint64_t cell_value = grid->cells[y * grid->size + x]->value;
+
+  for (unsigned int i = 0; i < grid->size; i++) {
+    if (i == x)
+      continue;
+
+    else if (cell_value == grid->cells[y * grid->size + i]->value) {
+      is_valid = 0;
+      break;
+    }
+  }
+
+  return is_valid;
+}
+
+/* Checks if the column of a given cell has no duplicate numbers. Returns 1 if
+ * column is valid, 0 otherwise. */
+static int check_col(Grid* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  uint64_t cell_value = grid->cells[y * grid->size + x]->value;
+
+  for (unsigned int i = 0; i < grid->size; i++) {
+    if (i == y)
+      continue;
+
+    else if (cell_value == grid->cells[i * grid->size + x]->value) {
+      is_valid = 0;
+      break;
+    }
+  }
+
+  return is_valid;
+}
+
+/* Checks if the room of a given cell makes the expected product. Returns 1 if
+ * room is valid, 0 otherwise. */
+static int check_room(Grid* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  Cell* iterator = grid->cells[y * grid->size + x];
+  unsigned long long current_product = 1;
+  unsigned long long expected_product = iterator->room_product;
+
+  while (iterator->previous != NULL)
+    iterator = iterator->previous;
+
+  while (iterator->next != NULL) {
+    current_product *= iterator->value;
+    iterator = iterator->next;
+  }
+
+  current_product *= iterator->value;
+
+  if (current_product != expected_product)
+    is_valid = 0;
+
+  return is_valid;
+}
+
+/* Checks if a single cell is valid. Returns 1 if cell is valid, 0 otherwise. */
+static int check_cell(Grid* grid, unsigned int x, unsigned int y) {
+  int is_valid = 1;
+
+  if (check_row(grid, x, y) == 0)
+    is_valid = 0;
+
+  else if (check_col(grid, x, y) == 0)
+    is_valid = 0;
+
+  else if (check_room(grid, x, y) == 0)
+    is_valid = 0;
+
+  return is_valid;
+}
+
+/* Checks if a grid is valid. Returns 1 if everything is valid, 0 otherwise. */
+static int check_grid(Grid* grid) {
+  for (unsigned int y = 0; y < grid->size; y++)
+    for (unsigned int x = 0; x < grid->size; x++)
+      if (check_cell(grid, x, y) == 0)
+        return 0;
+
+  return 1;
+}
+
+/* Fills all rooms that only have one cell with the value of that room. */
+static void fill_single_cells(Grid* grid) {
+  for (unsigned int y = 0; y < grid->size; y++) {
+    for (unsigned int x = 0; x < grid->size; x++) {
+      if (grid->cells[y * grid->size + x]->previous == NULL &&
+          grid->cells[y * grid->size + x]->next == NULL)
+        grid->cells[y * grid->size + x]->value =
+            grid->cells[y * grid->size + x]->room_product;
+    }
+  }
+}
+
+/* Main function.
+Currently the program can only have one argument which is the name of the file
+to read in order to resolve the grid coded in it.
+For now the function fills all single-celled rooms in the grid and checks if the
+result is a valid grid.
+It thens lists all cells in the std output and prints a formatted grid of the
+result to a new file. */
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file> (ex: %s ../test/5x5_Rapport)\n", argv[0],
+            argv[0]);
+    exit(EXIT_FAILURE);
+  }
+
+  printf("Program starting!\n\n");
+
+  /* Read the input file */
+  Grid* grid = read_file(argv[1]);
+
+  /* Testing integer factorization */
+  printf("Exemple de decomposition en facteurs entiers pour 40 :\n");
+  CompositesSet* test_set = find_composites(40);
+  print_composites_set(test_set);
+
+  /* Fills up all single-celled rooms */
+  fill_single_cells(grid);
+
+  /* Listing each cell with relevant values in console */
+  print_values_in_grid(grid);
+
+  /* Check if grid is valid */
+  if (check_grid(grid) == 1)
+    printf("The grid is valid.\n");
+  else
+    printf("The grid is invalid.\n");
+
+  /* Make a new file with the output grid */
+  print_grid(grid);
+
+  /* Clean up memory */
+  free_grid(grid);
+
+  printf("\nProgram ending!\n");
+
+  return 0;
+}

@@ -1,0 +1,21 @@
+#ifndef COMPOSITES_H
+#define COMPOSITES_H
+
+#include <stdint.h>
+
+typedef struct composite_t Composite;
+typedef struct composites_set_t CompositesSet;
+
+void freeCompositesSet (CompositesSet *set);
+void printCompositesSets (CompositesSet *set);
+void printCompositesSets (CompositesSet *set);
+void findCompositeNumbers (int x);
+Composite* generateEmptyComposite ();
+CompositesSet* generateEmptySet ();
+CompositesSet* findComposites (int product);
+CompositesSet* findSubComposites (unsigned int originalFactor, int subProduct, CompositesSet *originalSet);
+void addCompositeToSet (Composite *firstFactor, uint64_t factor);
+void addCompositesToSet (Composite *firstFactor, uint64_t factor1, uint64_t factor2);
+Composite* copyComposite (Composite *compositeToCopy);
+
+#endif /* COMPOSITES_H */

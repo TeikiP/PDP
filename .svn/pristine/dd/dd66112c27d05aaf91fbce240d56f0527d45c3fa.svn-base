@@ -1,0 +1,84 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "hashiwokakero.h"
+
+void fillGrid(FILE *_file, int **grid) {
+    if(_file == NULL) // vérification que le fichier existe.
+        printf("Erreur lecture de fichier\n");
+    else
+    {
+        char charRead;
+        int i = 0;
+        int j = 0;
+        charRead = fgetc(_file);
+        while(charRead != EOF) {
+            if(charRead == '_') { // si la grille a un '_' on le remplace par un 0 dans le tableau.
+                grid[i][j] = 0;
+                j++;
+            }
+            else if(charRead == '\n') {
+                i++;
+                j = 0;
+            }
+            else {
+                grid[i][j] = charRead - intToChar;
+                j++;
+            }
+            charRead = fgetc(_file);
+
+        }
+        fclose(_file);
+
+    }
+}
+
+void printGrid(int **grid) {
+    int i, j;
+    for(i = 0; i < sizeGrid; i++) {
+            if(i > 0)
+                printf("\n");
+        for(j = 0; j < sizeGrid; j++)
+            printf("%d", grid[i][j]);
+    }
+}
+
+void printGridInFile(int** grid) {
+    FILE *outputFile = NULL;
+
+    outputFile = fopen("../hashiOutput.txt", "w"); // on crée un fichier "hashiOutput.txt pour écrire la grille.
+    int i, j;
+    for(i = 0; i < sizeGrid; i++) {
+            if(i > 0)
+                fputc('\n', outputFile);
+        for(j = 0; j < sizeGrid; j++) {
+            if(grid[i][j] + intToChar == '0')
+                fputc('_', outputFile);
+            else
+                fputc(grid[i][j] + intToChar, outputFile);
+        }
+    }
+    fclose(outputFile);
+}
+
+int main()
+{
+    int i;
+    // allocation grille
+    int **hashiGrid = malloc(sizeof(int*) * sizeGrid);
+    for(i=0;i<sizeGrid;i++)
+        hashiGrid[i] = malloc(sizeof(int) * sizeGrid);
+
+    // ouverture du fichier
+    FILE *inputFile;
+    inputFile = fopen("../test/hashiInput.txt", "r");
+    // on remplit la grille
+    fillGrid(inputFile, hashiGrid);
+    // on l'affiche
+    printGrid(hashiGrid);
+    printGridInFile(hashiGrid);
+    // libération grille
+    free(hashiGrid);
+
+    return(0);
+}

@@ -1,0 +1,32 @@
+#ifndef COMPOSITES_H
+#define COMPOSITES_H
+
+#include <stdint.h>
+
+typedef struct composite_t Composite;
+
+struct composite_t {
+  /* Factor that makes up the factorized number. */
+  uint64_t factor;
+  /* Next factor that makes up the factorized number. */
+  Composite* next;
+};
+
+typedef struct composites_set_t CompositesSet;
+
+struct composites_set_t {
+  /* First factor that makes up this number. */
+  Composite* first_composite;
+  /* Next set of factors that make up this same number. */
+  CompositesSet* next;
+};
+
+int get_set_length(CompositesSet* set);
+
+void free_composites_set(CompositesSet* set);
+
+void print_composites_set(CompositesSet* set);
+
+CompositesSet* find_composites(int product);
+
+#endif /* COMPOSITES_H */

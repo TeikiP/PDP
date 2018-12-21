@@ -1,0 +1,10 @@
+#include "bitset.h"
+
+#include <stdint.h>
+
+
+int
+equals (uint64_t value1, uint64_t value2)
+{
+  return value1 == value2;
+}

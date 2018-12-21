@@ -1,0 +1,29 @@
+CFLAGS   = -Wall -Wextra -std=gnu99
+LDFLAGS  = -lm
+
+BIN      = hashiwokakero
+FILES	 = hashiwokakero.c island.c
+
+.PHONY: all clean cleanall
+
+all: $(BIN)
+
+hashiwokakero:
+	$(CC) $(CFLAGS) $(LDFLAGS) $(FILES) -o $(BIN)
+
+clean:
+	@(rm -f *.o *~)
+
+cleanall: clean
+	@(rm -f *.grid $(BIN))
+
+testsolve:
+	./hashiwokakero -f ../test/test_6x6_easy.txt
+	./hashiwokakero -f ../test/test_6x6_easy_v2.txt
+	./hashiwokakero -f ../test/test_6x6_easy_v3.txt
+	./hashiwokakero -f ../test/test_10x10_hard.txt
+	./hashiwokakero -f ../test/test_10x10_very_hard.txt
+	./hashiwokakero -f ../test/test_15x15_hard.txt
+	./hashiwokakero -f ../test/test_25x25_easy.txt
+	./hashiwokakero -f ../test/test_25x25_easy_v2.txt
+	./hashiwokakero -f ../test/test_25x25_hard.txt

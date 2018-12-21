@@ -1,0 +1,11 @@
+#ifndef HASHIWOKAKERO_H_INCLUDED
+#define HASHIWOKAKERO_H_INCLUDED
+
+int sizeGrid = 6; // taille de la grille.
+const int intToChar = 48; // constante pour convertir les entiers en caractère ou vice versa.
+
+void fillGrid(FILE *_file, int **grid); // pour remplir la grille.
+void printGrid(int **grid); // pour afficher la grille dans la console.
+void printGridInFile(int** grid); // pour écrire la grille dans un fichier "hashiOutput.txt".
+
+#endif // HASHIWOKAKERO_H_INCLUDED
